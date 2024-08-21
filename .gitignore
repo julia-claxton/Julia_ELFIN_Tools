@@ -1,0 +1,17 @@
+# Raw data files
+*.npz
+*.cdf
+/data/processed_position_data/*
+/data/processed_scientific_data/*
+/data/raw/*
+/python_environment
+
+# OS crap
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.icloud
