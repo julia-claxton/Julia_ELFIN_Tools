@@ -30,41 +30,41 @@ struct Event
 #============== FIELD NAME ===================|=========================== FIELD DESCRIPTION ==================================|============= FIELD UNITS =============#
     # Metadata fields         
     satellite::String                         # Which satellite the data was recorded on, ELFIN -A or -B ..................... |               
-    name::String                              # Name of event                                                                  |
-    duration::Float64                         # Length of the second in seconds                                                | seconds
+    name::String                              # Single string that can be used to re-create an event.                          |
+    duration::Float64                         # Event duration in seconds .................................................... | seconds
     n_datapoints::Int                         # Number of datapoints recorded during the event
-    n_observations::Int                       # Number of data points in the event ........................................... |
-    observation_edge_idxs::Vector{Int}        # Indices of where observations periods begin. Brackets time discontinuities     |
-    kp::Vector{Float64}                       # Kp index at event start time ................................................. |
-    dst::Vector{Float64}                      # Dst index at event start time                                                  |
+    n_observations::Int                       # Number of distinct periods where instruments were recording in the event ..... |
+    observation_edge_idxs::Vector{Int}        # Indices of where observations periods begin. Includes last index of data       |
+    kp::Vector{Float64}                       # 3-hour Kp index for each datapoint ........................................... |
+    dst::Vector{Float64}                      # Hourly Dst index for each datapoint                                            | nT
 
     # Spatial variable fields 
-    time_datetime::Vector{DateTime}           # Time of each datapoint in event as DateTime objects .......................... | 
-    time::Vector{Float64}                     # Time of each datapoint in event as seconds since event start                   | seconds
-    position::Dict                            # ELFIN's position at each time point in GEI coordinates ....................... | km
-
-    L::Vector{Float64}                        # L value of ELFIN's location at each time point ............................... | 
-    MLT::Vector{Float64}                      # MLT of ELFIN's location at each time point                                     | hour
+    time::Vector{Float64}                     # Time since event start for each datapoint                                      | seconds
+    time_datetime::Vector{DateTime}           # Date and time of each datapoint as DateTime objects .......................... | 
+    position::Dict                            # ELFIN's position at each time point in GEI coordinates. Access coordinates with
+                                              # position["x"][t], position["y"][t], position["z"][t] ......................... | km
+    L::Vector{Float64}                        # L value of ELFIN's location at each data point. Calculated with T87 model .... | 
+    MLT::Vector{Float64}                      # MLT of ELFIN's location at each data point                                     | hour
 
     # Science fields
     pitch_angles::Matrix{Float64}             # Pitch angle of each of ELFIN's look directions at each timestep .............. | degrees
-    energy_bins_min::Vector{Float64}          # Minimum value of each of ELFIN's energy channels ................................ | keV
+    energy_bins_min::Vector{Float64}          # Minimum value of each of ELFIN's energy channels ............................. | keV
     energy_bins_mean::Vector{Float64}         # Mean value of each of ELFIN's energy channels ................................ | keV
-    energy_bins_max::Vector{Float64}          # Maximum value of each of ELFIN's energy channels ................................ | keV
-    lc_idxs::Vector{Any}                      # Pitch angle indices corresponding to the loss cone
-    alc_idxs::Vector{Any}                     # Pitch angle indices corresponding to the anti-loss cone             
+    energy_bins_max::Vector{Float64}          # Maximum value of each of ELFIN's energy channels ............................. | keV
+    lc_idxs::Vector{Any}                      # Pitch angle indices inside the loss cone at each time step                     |
+    alc_idxs::Vector{Any}                     # Pitch angle indices inside the anti loss cone at each time step                |
     loss_cone_angles::Vector{Float64}         # Angle of the loss cone at each time step ..................................... | degrees
     anti_loss_cone_angles::Vector{Float64}    # Angle of the anti-loss cone at each time step ................................ | degrees
     avg_pitch_angles::Vector{Float64}         # Pitch angle of each of ELFIN's look directions averaged over all timesteps ... | degrees
-    avg_loss_cone_angle::Float64              # Average loss cone angle over event period .................................... | degrees
-    avg_anti_loss_cone_angle::Float64         # Average anti-loss cone angle over event period ............................... | degrees
+    avg_loss_cone_angle::Float64              # Average loss cone angle over full event ...................................... | degrees
+    avg_anti_loss_cone_angle::Float64         # Average anti loss cone angle over full event ................................. | degrees
 
     e_flux::Array{Float64}                    # Electron energy flux at each timestep, energy channel, and look direction .... | kev/(cm^2 str s MeV)
                                                   # Dimensions: [time, energy channel, pitch angle]                            |
     n_flux::Array{Float64}                    # Electron number flux at each timestep, energy channel, and look direction .... | electrons/(cm^2 str s MeV)
                                                   # Dimensions: [time, energy channel, pitch angle]                            |
     
-    Jprec_over_Jperp::Array{Float64}          # Ratio of electron flux in the loss cone to flux in the trapped area ... | unitless
+    Jprec_over_Jperp::Array{Float64}          # Ratio of electron flux in the loss cone to flux in the trapped area at each time step and energy channel.  | 
                                                   # Dimensions: [time, energy channel]
 end
 
@@ -516,7 +516,7 @@ end
 #                            EVENT METHODS                             #
 #                       ~~~~~~~~~~~~~~~~~~~~~~~~                       #
 ########################################################################
-function integrate_flux(event::Event; time = false, pitch_angle = false, energy = false, 
+function integrate_flux(event::Event; time = false, energy = false, pitch_angle = false,
                         time_range = 1:event.n_datapoints,
                         pitch_angle_range = "full",
                         energy_range_keV = (-Inf, Inf)

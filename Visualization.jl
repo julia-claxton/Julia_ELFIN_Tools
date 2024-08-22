@@ -52,26 +52,20 @@ function quicklook(event::Event; by = "index")
     display("image/png", plot!())
 end
 
-##############################################################################
-#                                                                            #
-#                            SUPPORTING FUNCTIONS                            #
-#                                                                            #
-##############################################################################
-
 function quicklook(event::Nothing; by = "index")
     @warn "No event"
     return nothing
 end
 
-function strip_heatmap(z; colormap = cgrad(:inferno))
+function _strip_heatmap(z; colormap = cgrad(:inferno))
     dims = size(z)
     x = 1:dims[2]
     y = 1:dims[1]
 
-    return strip_heatmap(x, y, z, colormap = colormap)
+    return _strip_heatmap(x, y, z, colormap = colormap)
 end
 
-function strip_heatmap(x, y, z; colormap = cgrad(:inferno), bg = :black)
+function _strip_heatmap(x, y, z; colormap = cgrad(:inferno), bg = :black)
     n_x = length(x)
     x_min = min(x...)
     x_max = max(x...)
@@ -114,7 +108,7 @@ function energy_time_series(event::Event; by = "index", save = false, show_plot 
 
     energy = event.energy_bins_mean ./ 1000 # MeV
     e_flux, _ = integrate_flux(event, pitch_angle = true)
-    strip_heatmap(x, log10.(energy), log10.(e_flux'), colormap = :ice)
+    _strip_heatmap(x, log10.(energy), log10.(e_flux'), colormap = :ice)
 
     plot!(
         title = "Pitch Angle Integrated Flux",
@@ -173,7 +167,7 @@ function J_over_J90_time_series(event::Event; by = "index", save = false, show_p
     
 
     energy = event.energy_bins_mean ./ 1000 # MeV
-    strip_heatmap(x, log10.(energy), log10.(event.Jprec_over_Jperp'), bg = RGB(.8,.8,.8), colormap = :ice)
+    _strip_heatmap(x, log10.(energy), log10.(event.Jprec_over_Jperp'), bg = RGB(.8,.8,.8), colormap = :ice)
 
     plot!(
         title = "Jprec/Jperp",
