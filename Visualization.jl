@@ -167,7 +167,7 @@ function J_over_J90_time_series(event::Event; by = "index", save = false, show_p
     
 
     energy = event.energy_bins_mean ./ 1000 # MeV
-    _strip_heatmap(x, log10.(energy), log10.(event.Jprec_over_Jperp'), bg = RGB(.8,.8,.8), colormap = :ice)
+    _strip_heatmap(x, log10.(energy), log10.(event.Jprec_over_Jtrap'), bg = RGB(.8,.8,.8), colormap = :ice)
 
     plot!(
         title = "Jprec/Jperp",

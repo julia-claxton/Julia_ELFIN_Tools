@@ -64,7 +64,7 @@ struct Event
     n_flux::Array{Float64}                    # Electron number flux at each timestep, energy channel, and look direction .... | electrons/(cm^2 str s MeV)
                                                   # Dimensions: [time, energy channel, pitch angle]                            |
     
-    Jprec_over_Jperp::Array{Float64}          # Ratio of electron flux in the loss cone to flux in the trapped area at each time step and energy channel.  | 
+    Jprec_over_Jtrap::Array{Float64}          # Ratio of electron flux in the loss cone to flux in the trapped area at each time step and energy channel.  | 
                                                   # Dimensions: [time, energy channel]
 end
 
@@ -291,7 +291,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat::St
 
     # Calculate loss/anti-loss cones over the observation
     _calculate_loss_cones(data, binned, n_datapoints, indices_of_interest) # Mutates data dict
-    _calculate_Jprec_over_Jperp(data, binned)
+    _calculate_Jprec_over_Jtrap(data, binned)
 
     # Get average angles
     avg_pitch_angles = dropdims(mean(binned["pitch_angles"], dims = 1), dims = 1) # Average pitch angle each bin is facing over time
@@ -310,7 +310,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat::St
         
         binned["pitch_angles"], data["energy_bins_min"], data["energy_bins_mean"], data["energy_bins_max"], data["loss_cone_idxs"], data["anti_loss_cone_idxs"], data["loss_cone_angles"], data["anti_loss_cone_angles"], avg_pitch_angles, avg_loss_cone_angle, avg_anti_loss_cone_angle,
                  
-        binned["e_flux"], binned["n_flux"], data["Jprec_over_Jperp"]
+        binned["e_flux"], binned["n_flux"], data["Jprec_over_Jtrap"]
     )
 end
 
@@ -460,7 +460,7 @@ function _calculate_loss_cones(data, binned, n_datapoints, indices_of_interest)
     data["anti_loss_cone_idxs"] = anti_loss_cone_idxs
 end
 
-function _calculate_Jprec_over_Jperp(data, binned)
+function _calculate_Jprec_over_Jtrap(data, binned)
     time = data["time"]
     pitch_angles = binned["pitch_angles"]
 
@@ -504,10 +504,10 @@ function _calculate_Jprec_over_Jperp(data, binned)
     trapped_n_flux[trapped_n_flux .<= 10^2.5] .= 0
 
     # Get ratio. NaN => prec and trapped both zero, Inf => trapped is zero
-    Jprec_over_Jperp = loss_cone_n_flux ./ trapped_n_flux
+    Jprec_over_Jtrap = loss_cone_n_flux ./ trapped_n_flux
 
     # Mutate data dict to return results
-    data["Jprec_over_Jperp"] = Jprec_over_Jperp
+    data["Jprec_over_Jtrap"] = Jprec_over_Jtrap
 end
 
 
