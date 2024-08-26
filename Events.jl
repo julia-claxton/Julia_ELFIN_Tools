@@ -306,7 +306,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat::St
     return Event(
         data["satellite"], name, duration, n_datapoints, n_observations, observation_edge_idxs, kp, dst,
 
-        time_datetime, time, position, L, MLT, 
+        time, time_datetime, position, L, MLT, 
         
         binned["pitch_angles"], data["energy_bins_min"], data["energy_bins_mean"], data["energy_bins_max"], data["loss_cone_idxs"], data["anti_loss_cone_idxs"], data["loss_cone_angles"], data["anti_loss_cone_angles"], avg_pitch_angles, avg_loss_cone_angle, avg_anti_loss_cone_angle,
                  
