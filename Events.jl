@@ -153,6 +153,9 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
 
         if warnings == true; @warn "\033[93mcreate_event(): No data exists for end time $(old_end). Ending event at nearest observation ($(difference) s).\033[0m"; end
     end
+    if start_datetime == stop_datetime
+        @warn "Event start and stop times are equal, n_datapoints = 1."
+    end
     #################### END GUARD BLOCK ####################
 
 
