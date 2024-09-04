@@ -90,7 +90,7 @@ function create_event(name::String; warn = false)
     return create_event(start_datetime, stop_datetime, sat, warn = warn)
 end
 
-function create_event(date::Date, sat::String; warn = false)
+function create_event(date::Date, sat; warn = false)
 # Creates an Event object from a date and satellite name. Event covers all data recorded on the given date.
     start_datetime = DateTime(date, Time("00:00:00"))
     stop_datetime   = DateTime(date, Time("23:59:59"))
@@ -98,7 +98,7 @@ function create_event(date::Date, sat::String; warn = false)
     return create_event(start_datetime, stop_datetime, sat, warn = warn)
 end
 
-function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat::String; warn = false)
+function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; warn = false)
 # Creates an Event object from a start datetime, stop datetime, and satellite ID (either "a", "A", "b", or "B")
 
     #################### GUARD BLOCK ####################
@@ -107,7 +107,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat::St
     month = string(Month(start_datetime).value, pad = 2)
     day = string(Day(start_datetime).value, pad = 2)
 
-    if lowercase(sat) ∉ ["a", "b"]
+    if lowercase(sat) ∉ ["a", "b", 'a', 'b']
         error("Satellite \"$(sat)\" not recognized.")
     end
 
