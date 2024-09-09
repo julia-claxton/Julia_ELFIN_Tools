@@ -156,15 +156,7 @@ function J_over_J90_time_series(event::Event; by = "index", save = false, show_p
         obs_edges = event.time[event.observation_edge_idxs[1:end-1]]
     else
         error("Keyword argument by=\"$(by)\" not recognized.")
-    end
-
-    # Create diverging colorbar centered on 0
-    colorbar_range = (-1.25, .25)
-    color_anchors = [colorbar_range[1], 0, colorbar_range[2]]
-    color_anchors = (color_anchors .- min(color_anchors...)) ./ (max(color_anchors...) - min(color_anchors...)) # Map to [0,1]
-    colorbar = cgrad(:grays, color_anchors)
-    c = cgrad(:cherry, rev = true)
-    
+    end    
 
     energy = event.energy_bins_mean ./ 1000 # MeV
     _strip_heatmap(x, log10.(energy), log10.(event.Jprec_over_Jtrap'), bg = RGB(.8,.8,.8), colormap = :ice)
