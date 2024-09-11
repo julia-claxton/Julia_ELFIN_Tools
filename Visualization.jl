@@ -4,7 +4,6 @@ using LinearAlgebra
 using Dates
 using Plots
 using Plots.PlotMeasures
-using NumericalIntegration
 using ColorSchemes
 
 include("./Events.jl")
@@ -44,12 +43,12 @@ function quicklook(event::Event; by = "index")
     plot(lc_ratio, energy_heatmap, pad_heatmap, blank, L_shell, blank, abs_sunset, rel_sunset,
         layout = l,
         plot_title = "$(Date(event.time_datetime[1])) $(Time(event.time_datetime[1])) ELFIN-$(event.satellite)\nDuration = $(event.duration) s / $(event.n_datapoints) observations",
-        background_color = :transparent,
+        background_color = :white,
         size = (1,1.4) .* 900,
         format = :png,
         dpi = 300
     )
-    display("image/png", plot!())
+    display(plot!())
 end
 
 function quicklook(event::Nothing; by = "index")
@@ -89,7 +88,7 @@ function _strip_heatmap(x, y, z; colormap = cgrad(:inferno), bg = :black)
     return plot!()
 end
 
-function energy_time_series(event::Event; by = "index", save = false, show_plot = true)
+function energy_time_series(event::Event; by = "index", show_plot = true)
     if by == "index"
         x = eachindex(event.time)
         x_label = "Data Index"
@@ -135,13 +134,10 @@ function energy_time_series(event::Event; by = "index", save = false, show_plot 
     if show_plot == true
         display(plot!())
     end
-    if save == true
-        png("../results/figures/time_series_$(event.name)")
-    end
     return plot!()
 end
 
-function J_over_J90_time_series(event::Event; by = "index", save = false, show_plot = true)
+function J_over_J90_time_series(event::Event; by = "index", show_plot = true)
     if by == "index"
         x = eachindex(event.time)
         x_label = "Data Index"
@@ -187,10 +183,7 @@ function J_over_J90_time_series(event::Event; by = "index", save = false, show_p
         label = ""
     )
     if show_plot == true
-        display("image/png", plot!())
-    end
-    if save == true
-        png("../results/figures/time_series_prec_over_perp_$(event.name)")
+        display(plot!())
     end
     return plot!()
 end
@@ -297,13 +290,13 @@ function pad_time_series(event::Event; by = "index", show_plot = true)
     )
 
     if show_plot == true
-        display("image/png", plot!())
+        display(plot!())
     end
     return plot!()
 end
 
 
-function L_MLT_time_series(event::Event; by = "index", save = false, show_plot = true)
+function L_MLT_time_series(event::Event; by = "index", show_plot = true)
     if by == "index"
         x = eachindex(event.time)
         x_label = "Data Index"
@@ -378,9 +371,6 @@ function L_MLT_time_series(event::Event; by = "index", save = false, show_plot =
         )
     end
 
-
-
-
     # Plot belt L ranges
     plot!(Shape([x_min, x_min, x_max, x_max], [1, 2.5, 2.5, 1]),
         fillcolor = RGBA(0,0,0,.1),
@@ -400,9 +390,6 @@ function L_MLT_time_series(event::Event; by = "index", save = false, show_plot =
     )
     if show_plot == true
         display(plot!())
-    end
-    if save == true
-        png("../results/figures/time_series_$(event.name)")
     end
     return plot!()
 end

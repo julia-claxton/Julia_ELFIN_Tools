@@ -72,17 +72,17 @@ The Event type contains several fields with metadata, location/time, and science
 ### Science Data Fields
 | Field Name | Description | Units |
 |---:|---|:---:|
-| `pitch_angles` | Pitch angle of each of ELFIN's look directions at each timestep | degrees |
+| `pitch_angles` | Pitch angle of each of ELFIN's look directions at each timestep. Dimensions = [time, look direction] | degrees |
 | `energy_bins_min` | Minimum value of each of ELFIN's energy channels | keV |
 | `energy_bins_mean` | Mean value of each of ELFIN's energy channels | keV |
 | `energy_bins_max` | Maximum value of each of ELFIN's energy channels | keV |
-| `lc_idxs` | Pitch angle indices inside the loss cone at each time step |  |
-| `alc_idxs` | Pitch angle indices inside the anti loss cone at each time step |  |
+| `lc_idxs` | Look direction indices inside the loss cone at each time step |  |
+| `alc_idxs` | Look direction indices inside the anti loss cone at each time step |  |
 | `loss_cone_angles` | Angle of the loss cone at each time step | degrees |
 | `anti_loss_cone_angles` | Angle of the anti-loss cone at each time step | degrees |
 | `avg_pitch_angles` | Pitch angle of each of ELFIN's look directions averaged over all timesteps. Mainly useful for short events. | degrees |
-| `avg_loss_cone_angle` | Average loss cone angle over full event | degrees |
-| `avg_anti_loss_cone_angle` | Average anti loss cone angle over full event | degrees |
+| `avg_loss_cone_angle` | Average loss cone angle over full event. | degrees |
+| `avg_anti_loss_cone_angle` | Average anti loss cone angle over full event. | degrees |
 | `e_flux` | Electron energy flux at each timestep, energy channel, and look direction. Dimensions = [time, energy channel, pitch angle] | kev/(cm^2 str s MeV) |
 | `n_flux` | Electron number flux at each timestep, energy channel, and look direction. Dimensions = [time, energy channel, pitch angle] | #/(cm^2 str s MeV) |
 | `Jprec_over_Jperp` | Ratio of electron flux in the loss cone to flux in the trapped area at each time step and energy channel. Dimensions = [time, energy channel] |  |
