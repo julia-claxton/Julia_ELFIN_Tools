@@ -47,7 +47,7 @@ function quicklook(event::Event; by = "index")
         background_color = :transparent,
         size = (1,1.4) .* 900,
         format = :png,
-        dpi = 700
+        dpi = 300
     )
     display("image/png", plot!())
 end
