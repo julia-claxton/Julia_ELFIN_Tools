@@ -56,7 +56,8 @@ The Event type contains several fields with metadata, location/time, and science
 | `duration` | Event duration in seconds | s |
 | `n_datapoints` | Number of datapoints recorded during the event |  |
 | `n_observations` | Number of distinct periods where instruments were recording in the event |  |
-| `observation_edge_idxs` | Indices of where observations periods begin. Includes last index of data |  |
+| `observation_start_idxs` | Indices where observations periods begin |  |
+| `observation_stop_idxs` | Indices where observations periods end |  |
 | `kp` | 3-hour Kp index for each datapoint |  |
 | `dst` | Hourly Dst index for each datapoint | nT |
 

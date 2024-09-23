@@ -30,29 +30,30 @@ struct Event
 #============== FIELD NAME ===================|=========================== FIELD DESCRIPTION ==================================|============= FIELD UNITS =============#
     # Metadata fields         
     satellite::String                         # Which satellite the data was recorded on, ELFIN -A or -B ..................... |               
-    name::String                              # Single string that can be used to re-create an event.                          |
+    name::String                              # Single string that can be used to re-create an event ......................... |
     duration::Float64                         # Event duration in seconds .................................................... | seconds
-    n_datapoints::Int                         # Number of datapoints recorded during the event
+    n_datapoints::Int                         # Number of datapoints recorded during the event ............................... |
     n_observations::Int                       # Number of distinct periods where instruments were recording in the event ..... |
-    observation_edge_idxs::Vector{Int}        # Indices of where observations periods begin. Includes last index of data       |
+    observation_start_idxs::Vector{Int}       # Indices of where observations periods begin .................................. |
+    observation_stop_idxs::Vector{Int}        # Indices of where observations periods end .................................... |
     kp::Vector{Float64}                       # 3-hour Kp index for each datapoint ........................................... |
-    dst::Vector{Float64}                      # Hourly Dst index for each datapoint                                            | nT
+    dst::Vector{Float64}                      # Hourly Dst index for each datapoint .......................................... | nT
 
     # Spatial variable fields 
-    time::Vector{Float64}                     # Time since event start for each datapoint                                      | seconds
+    time::Vector{Float64}                     # Time since event start for each datapoint .................................... | seconds
     time_datetime::Vector{DateTime}           # Date and time of each datapoint as DateTime objects .......................... | 
     position::Dict                            # ELFIN's position at each time point in GEI coordinates. Access coordinates with
                                               # position["x"][t], position["y"][t], position["z"][t] ......................... | km
     L::Vector{Float64}                        # L value of ELFIN's location at each data point. Calculated with T87 model .... | 
-    MLT::Vector{Float64}                      # MLT of ELFIN's location at each data point                                     | hour
+    MLT::Vector{Float64}                      # MLT of ELFIN's location at each data point ................................... | hour
 
     # Science fields
     pitch_angles::Matrix{Float64}             # Pitch angle of each of ELFIN's look directions at each timestep .............. | degrees
     energy_bins_min::Vector{Float64}          # Minimum value of each of ELFIN's energy channels ............................. | keV
     energy_bins_mean::Vector{Float64}         # Mean value of each of ELFIN's energy channels ................................ | keV
     energy_bins_max::Vector{Float64}          # Maximum value of each of ELFIN's energy channels ............................. | keV
-    lc_idxs::Vector{Any}                      # Pitch angle indices inside the loss cone at each time step                     |
-    alc_idxs::Vector{Any}                     # Pitch angle indices inside the anti loss cone at each time step                |
+    lc_idxs::Vector{Any}                      # Pitch angle indices inside the loss cone at each time step ................... |
+    alc_idxs::Vector{Any}                     # Pitch angle indices inside the anti loss cone at each time step .............. |
     loss_cone_angles::Vector{Float64}         # Angle of the loss cone at each time step ..................................... | degrees
     anti_loss_cone_angles::Vector{Float64}    # Angle of the anti-loss cone at each time step ................................ | degrees
     avg_pitch_angles::Vector{Float64}         # Pitch angle of each of ELFIN's look directions averaged over all timesteps ... | degrees
@@ -154,7 +155,11 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
         if warnings == true; @warn "\033[93mcreate_event(): No data exists for end time $(old_end). Ending event at nearest observation ($(difference) s).\033[0m"; end
     end
     if start_datetime == stop_datetime
-        @warn "Event start and stop times are equal, n_datapoints = 1."
+        if warn == true; @warn "Event start and stop times are equal, n_datapoints = 1."; end
+    end
+    if start_datetime > stop_datetime
+        if warn == true; @warn "Start time later than stop time. No event created."; end
+        return nothing
     end
     #################### END GUARD BLOCK ####################
 
@@ -164,11 +169,10 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
     indices_of_interest = (data["fs_time"] .>= start_datetime) .& (data["fs_time"] .<= stop_datetime)
     data["indices_of_interest"] = indices_of_interest # Save to data dict in case needed for debugging. Data dict will keep it hidden from end user.
     n_datapoints = sum(indices_of_interest)
-    if n_datapoints == 0
+    if (warn == true) && (n_datapoints == 0)
         @warn "\033[93mNo data exists between start time and end time (Δt = $(stop_datetime - start_datetime)), no event created.\033[0m"
         return nothing
     end
-        
 
     # Get science time grid
     time_datetime = data["fs_time"][indices_of_interest]
@@ -180,17 +184,16 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
     # Get geomagnetic indices
     dst, kp = _get_geomagnetic_indices(time_datetime)
 
-
     # Get observation periods
-    observation_edge_idxs = [1]
-    append!(observation_edge_idxs, findall(diff(time_datetime) .>= Second(60)) .+ 1) # Plus one since diff() drops an index
-    append!(observation_edge_idxs, [n_datapoints + 1]) # Plus one because obs periods only last until edge - 1 index to not overlap periods
-    observation_edge_idxs = unique(observation_edge_idxs) # In case first index is the last before a long gap
-    n_observations = length(observation_edge_idxs) - 1
+    observation_start_idxs = [1]
+    append!(observation_start_idxs, findall(diff(time_datetime) .>= Second(60)) .+ 1) # Plus one since diff() drops an index
+    observation_start_idxs = unique(observation_start_idxs) # In case first index is the last before a long gap
+    observation_stop_idxs = cat(observation_start_idxs[2:end] .- 1, n_datapoints, dims = 1)
+    n_observations = length(observation_start_idxs)
+    @assert length(observation_start_idxs) == length(observation_stop_idxs) "Something has gone very wrong. Email julia.claxton@colorado.edu with the command that threw this error."
 
-    # Create event name
+    # Create event namestring
     name = Dates.format(start_datetime, dateformat"yyyy-mm-dd_HH:MM:SS") * "_" * string(duration) * "_EL$(data["satellite"])"
-
 
     # WARNINGS BLOCK ------
     # Ensure there is data available during the time specified
@@ -307,7 +310,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
     #############################################################################
     # Create the Event object and return it
     return Event(
-        data["satellite"], name, duration, n_datapoints, n_observations, observation_edge_idxs, kp, dst,
+        data["satellite"], name, duration, n_datapoints, n_observations, observation_start_idxs, observation_stop_idxs, kp, dst,
 
         time, time_datetime, position, L, MLT, 
         

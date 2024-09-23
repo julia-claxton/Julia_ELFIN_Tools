@@ -8,6 +8,8 @@ using ColorSchemes
 
 include("./Events.jl")
 
+USE_VSCODE_PLOTS = false # This variable should be set to true if you are running Julia from VSCode. This tailors the plots to be a bit better when using VSCode.
+
 """
 Visualization.jl
 
@@ -48,7 +50,7 @@ function quicklook(event::Event; by = "index")
         format = :png,
         dpi = 300
     )
-    display(plot!())
+    _display_plot()
 end
 
 function quicklook(event::Nothing; by = "index")
@@ -92,15 +94,15 @@ function energy_time_series(event::Event; by = "index", show_plot = true)
     if by == "index"
         x = eachindex(event.time)
         x_label = "Data Index"
-        obs_edges = event.observation_edge_idxs
+        obs_edges = event.observation_start_idxs
     elseif by == "time"
         x = event.time
         x_label = "Time (s)"
-        obs_edges = event.time[event.observation_edge_idxs[1:end-1]]
+        obs_edges = event.time[event.observation_start_idxs]
     elseif by == "date"
         x = event.time
         x_label = "Time (UTC), $(Date(event.time_datetime[1]))"
-        obs_edges = event.time[event.observation_edge_idxs[1:end-1]]
+        obs_edges = event.time[event.observation_start_idxs]
     else
         error("Keyword argument by=\"$(by)\" not recognized.")
     end
@@ -141,15 +143,15 @@ function J_over_J90_time_series(event::Event; by = "index", show_plot = true)
     if by == "index"
         x = eachindex(event.time)
         x_label = "Data Index"
-        obs_edges = event.observation_edge_idxs
+        obs_edges = event.observation_start_idxs
     elseif by == "time"
         x = event.time
         x_label = "Time (s)"
-        obs_edges = event.time[event.observation_edge_idxs[1:end-1]]
+        obs_edges = event.time[event.observation_start_idxs]
     elseif by == "date"
         x = event.time
         x_label = "Time (UTC), $(Date(event.time_datetime[1]))"
-        obs_edges = event.time[event.observation_edge_idxs[1:end-1]]
+        obs_edges = event.time[event.observation_start_idxs]
     else
         error("Keyword argument by=\"$(by)\" not recognized.")
     end    
@@ -183,7 +185,7 @@ function J_over_J90_time_series(event::Event; by = "index", show_plot = true)
         label = ""
     )
     if show_plot == true
-        display(plot!())
+        display("image/png", plot!())
     end
     return plot!()
 end
@@ -192,15 +194,15 @@ function pad_time_series(event::Event; by = "index", show_plot = true)
     if by == "index"
         time = collect(eachindex(event.time))
         x_label = "Data Index"
-        obs_edges = event.observation_edge_idxs
+        obs_edges = event.observation_start_idxs
     elseif by == "time"
         time = event.time
         x_label = "Time (s)"
-        obs_edges = event.time[event.observation_edge_idxs[1:end-1]]
+        obs_edges = event.time[event.observation_start_idxs]
     elseif by == "date"
         time = event.time
         x_label = "Time (UTC), $(Date(event.time_datetime[1]))"
-        obs_edges = event.time[event.observation_edge_idxs[1:end-1]]
+        obs_edges = event.time[event.observation_start_idxs]
     else
         error("Keyword argument by=\"$(by)\" not recognized.")
     end
@@ -290,7 +292,7 @@ function pad_time_series(event::Event; by = "index", show_plot = true)
     )
 
     if show_plot == true
-        display(plot!())
+        display("image/png", plot!())
     end
     return plot!()
 end
@@ -300,15 +302,15 @@ function L_MLT_time_series(event::Event; by = "index", show_plot = true)
     if by == "index"
         x = eachindex(event.time)
         x_label = "Data Index"
-        obs_edges = event.observation_edge_idxs
+        obs_edges = event.observation_start_idxs
     elseif by == "time"
         x = event.time
         x_label = "Time (s)"
-        obs_edges = event.time[event.observation_edge_idxs[1:end-1]]
+        obs_edges = event.time[event.observation_start_idxs]
     elseif by == "date"
         x = event.time
         x_label = "Time (UTC), $(Date(event.time_datetime[1]))"
-        obs_edges = event.time[event.observation_edge_idxs[1:end-1]]
+        obs_edges = event.time[event.observation_start_idxs]
     else
         error("Keyword argument by=\"$(by)\" not recognized.")
     end
@@ -342,21 +344,17 @@ function L_MLT_time_series(event::Event; by = "index", show_plot = true)
         plot!(xticks = (event.time[tick_idxs], ticks))
     end
 
-
     # Plot each observation period
     for i = 1:event.n_observations
-        slice = event.observation_edge_idxs[i]:(event.observation_edge_idxs[i+1]-1)
+        slice = event.observation_start_idxs[i]:(event.observation_stop_idxs[i])
         plot!(x[slice], y[slice],
             label = "",
             linewidth = 1.5,
             linecolor = :black
         )
     end
-
-
-
     for i = 1:event.n_observations
-        slice = event.observation_edge_idxs[i]:(event.observation_edge_idxs[i+1]-1)
+        slice = event.observation_start_idxs[i]:(event.observation_stop_idxs[i])
         plot!(twinx(), x[slice], event.MLT[slice],
             xlims = (x_min, x_max),
             ylims = (0, 24),
@@ -589,4 +587,12 @@ function MLT_L_track(event::Event; index = false, show_plot = true)
         display(plot!())
     end
     return plot!()
+end
+
+function _display_plot()
+    if USE_VSCODE_PLOTS == true
+        display("image/png", plot!())
+    else
+        display(plot!())
+    end
 end
