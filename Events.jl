@@ -524,22 +524,11 @@ end
 ########################################################################
 function integrate_flux(event::Event; time = false, energy = false, pitch_angle = false,
                         time_range = 1:event.n_datapoints,
-                        pitch_angle_range = "full",
-                        energy_range_keV = (-Inf, Inf)
+                        pitch_angle_range = (0, 180), # deg
+                        energy_range = (-Inf, Inf) # keV
                         )
-    if pitch_angle_range == "full"
-        pitch_angle_idxs = [1:16 for i = 1:event.n_datapoints]
-    elseif pitch_angle_range == "loss cone"
-        pitch_angle_idxs = event.lc_idxs
-    elseif pitch_angle_range == "anti loss cone"
-        pitch_angle_idxs = event.alc_idxs
-    elseif pitch_angle_range == "trapped"
-        pitch_angle_idxs = [setdiff(1:16, event.lc_idxs[t], event.alc_idxs[t]) for t = 1:event.n_datapoints]
-    else
-        error("Keyword argument pitch_angle_range=$(pitch_angle_range) not recognized. Please use \"full\", \"loss cone\", or \"anti loss cone\".")
-    end
-
-    energy_range_idx = energy_range_keV[1] .<= event.energy_bins_mean .<= energy_range_keV[2]
+    pa_range_idxs = pitch_angle_range[1] .<= event.pitch_angles .<= pitch_angle_range[2]
+    energy_range_idx = energy_range[1] .<= event.energy_bins_mean .<= energy_range[2]
 
     e_flux = copy(event.e_flux)
     n_flux = copy(event.n_flux)
@@ -551,7 +540,7 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
 
     # Do integrations in reverse order of their dimension (ie pitch angle, energy, then time). This prevents one integration from changing another.
     if pitch_angle == true
-       e_flux, n_flux = _integrate_over_pitch_angle(event, e_flux, n_flux, pitch_angle_idxs)
+       e_flux, n_flux = _integrate_over_pitch_angle(event, e_flux, n_flux, pa_range_idxs)
        pa = 1
     end
 
@@ -570,16 +559,19 @@ end
 
 function _integrate_over_pitch_angle(event::Event, e_flux, n_flux, pitch_angle_idxs)
     for t = 1:event.n_datapoints
-        # Don't continue if we don't have loss cone coverage
-        if length(pitch_angle_idxs[t]) < 2
+        idxs_to_integrate = findall(pitch_angle_idxs[t,:])
+
+        # Don't integrate if we don't have pitch angle coverage
+        if length(idxs_to_integrate) < 2
+            @warn "< 2 pitch angle bins in given range $pitch_angle_idxs at time index $t, filled with NaNs"
             e_flux[t, :, :] .= NaN
             continue
         end
 
-        α = event.pitch_angles[t, pitch_angle_idxs[t]]
+        α = event.pitch_angles[t, idxs_to_integrate]
         for E = 1:16
-            e_flux[t, E, :] .= 2π * integrate(α, e_flux[t, E, pitch_angle_idxs[t]] .* sind.(α), Trapezoidal())
-            n_flux[t, E, :] .= 2π * integrate(α, n_flux[t, E, pitch_angle_idxs[t]] .* sind.(α), Trapezoidal())
+            e_flux[t, E, :] .= 2π * integrate(α, e_flux[t, E, idxs_to_integrate] .* sind.(α), Trapezoidal())
+            n_flux[t, E, :] .= 2π * integrate(α, n_flux[t, E, idxs_to_integrate] .* sind.(α), Trapezoidal())
         end
     end
     return e_flux, n_flux
