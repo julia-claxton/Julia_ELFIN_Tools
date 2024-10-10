@@ -85,7 +85,7 @@ function _strip_heatmap(x, y, z; colormap = cgrad(:inferno), bg = :black)
         xlims = (x_min, x_max),
         ylims = (y_min, y_max),
         aspect_ratio = (x_range / y_range) * .15,
-        dpi = 700
+        dpi = 300
     )
     return plot!()
 end
@@ -160,17 +160,17 @@ function J_over_J90_time_series(event::Event; by = "index", show_plot = true)
     _strip_heatmap(x, log10.(energy), log10.(event.Jprec_over_Jtrap'), bg = RGB(.8,.8,.8), colormap = :ice)
 
     plot!(
-        title = "Jprec/Jperp",
+        title = "Jprec/Jtrap",
         xlabel = x_label,
         ylabel = "Energy (MeV)",
-        colorbar_title = "Log10 Jprec/Jperp",
+        colorbar_title = "Log10 Jprec/Jtrap",
         background = :transparent,
         grid = false,
         clims = (-1.25, .25),
         yticks = (log10.(energy[1:3:16]), round.(energy[1:3:16], sigdigits = 2)),
         margin = 5mm,
         size = (1.3, .33) .* 500,
-        dpi = 700
+        dpi = 300
     )
     # Add date ticks if needed
     if by == "date"
@@ -257,7 +257,7 @@ function pad_time_series(event::Event; by = "index", show_plot = true)
         aspect_ratio = ((time[end-1] - time[1]) / 180) * .15,
         leftmargin = 8mm,
         size = (1, .3) .* 600,
-        dpi = 700
+        dpi = 300
     )
     heatmap!(image_grid_time, image_grid_pitch_angle, image',
         colormap = :ice,
@@ -422,7 +422,7 @@ function absolute_sunset(event::Event; show_plot = true)
         background_color_outside = :transparent,
         framestyle = :grid,
         grid = false,
-        dpi = 700
+        dpi = 300
     )
     heatmap!(x, y, log10.(e_flux),
         colormap = :ice #:cherry
@@ -496,7 +496,7 @@ function relative_sunset(event::Event; show_plot = true)
         background_color_outside = :transparent,
         framestyle = :grid,
         grid = false,
-        dpi = 700
+        dpi = 300
     )
     heatmap!(x, y, e_flux,
         colormap = colorbar
@@ -531,7 +531,7 @@ function MLT_L_track(event::Event; index = false, show_plot = true)
         ylims = (0, 8),
         background_color = :transparent,
         grid = false,
-        dpi = 700
+        dpi = 300
     )
     # Black background
     plot!(Shape(vcat(Plots.partialcircle(0, 2π, 100, 0), reverse(Plots.partialcircle(0, 2π, 100, 1)))), fillcolor = :black, label = "")

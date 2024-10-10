@@ -169,8 +169,8 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
     indices_of_interest = (data["fs_time"] .>= start_datetime) .& (data["fs_time"] .<= stop_datetime)
     data["indices_of_interest"] = indices_of_interest # Save to data dict in case needed for debugging. Data dict will keep it hidden from end user.
     n_datapoints = sum(indices_of_interest)
-    if (warn == true) && (n_datapoints == 0)
-        @warn "\033[93mNo data exists between start time and end time (Δt = $(stop_datetime - start_datetime)), no event created.\033[0m"
+    if n_datapoints == 0
+        if warn == true; @warn "\033[93mNo data exists between start time and end time (Δt = $(stop_datetime - start_datetime)), no event created.\033[0m"; end
         return nothing
     end
 
