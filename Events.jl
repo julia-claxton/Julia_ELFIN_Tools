@@ -140,7 +140,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
         end
         difference = string(difference)
 
-        if warnings == true; @warn "\033[93mcreate_event(): No data exists for start time $(old_start). Starting event at nearest observation ($(difference) s).\033[0m"; end
+        if warn == true; @warn "\033[93mcreate_event(): No data exists for start time $(old_start). Starting event at nearest observation ($(difference) s).\033[0m"; end
     end
     if min(abs.(time_from_end)...) >= Second(2) # If the nearest time is more than 2 seconds away. This means ~10 missed observations at ELFIN's sampling about every .2 seconds.
         _, idx = findmin(abs.(time_from_end))
@@ -152,7 +152,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
         end
         difference = string(difference)
 
-        if warnings == true; @warn "\033[93mcreate_event(): No data exists for end time $(old_end). Ending event at nearest observation ($(difference) s).\033[0m"; end
+        if warn == true; @warn "\033[93mcreate_event(): No data exists for end time $(old_end). Ending event at nearest observation ($(difference) s).\033[0m"; end
     end
     if start_datetime == stop_datetime
         if warn == true; @warn "Event start and stop times are equal, n_datapoints = 1."; end
@@ -289,7 +289,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
 
     ##########################################################################
     # Bin data into ELFIN's discrete look directions
-    binned = _bin_data(data, n_datapoints, indices_of_interest)
+    binned = _bin_data(data, n_datapoints, indices_of_interest, warn)
     if binned == nothing
         # Warning contained in _bin_data()
         return nothing
@@ -396,7 +396,7 @@ function _get_geomagnetic_indices(time_datetime)
     return results["dst"], results["kp"]
 end
 
-function _bin_data(data, n_datapoints, indices_of_interest)
+function _bin_data(data, n_datapoints, indices_of_interest, warn)
 # Bin pitch angle and flux data into ELFIN's discrete look directions
     total_observations = length(data["fs_Epat_nflux"][:,1,1]) # Dimensions of data["fs_Epat_nflux"]: [time, pitch angle, energy channel]
 
@@ -412,15 +412,15 @@ function _bin_data(data, n_datapoints, indices_of_interest)
 
 
     if sum(isnan.(nflux)) ≠ 0
-        if warnings == true; @warn "\033[93m_bin_data(): n_flux data contains NaN.\033[0m"; end
+        if warn == true; @warn "\033[93m_bin_data(): n_flux data contains NaN.\033[0m"; end
         nflux[isnan.(nflux)] .= 0
     end
     if sum(isnan.(eflux)) ≠ 0
-        if warnings == true; @warn "\033[93m_bin_data(): e_flux data contains NaN.\033[0m"; end
+        if warn == true; @warn "\033[93m_bin_data(): e_flux data contains NaN.\033[0m"; end
         eflux[isnan.(eflux)] .= 0
     end
     if sum(isnan.(pitch_angles)) ≠ 0
-        if warnings == true; @warn "\033[93m_bin_data(): Pitch angle data contains NaN.\033[0m"; end
+        if warn == true; @warn "\033[93m_bin_data(): Pitch angle data contains NaN.\033[0m"; end
         return nothing
     end
 
@@ -502,8 +502,6 @@ function _calculate_Jprec_over_Jtrap(data, binned)
         # Average the flux in the loss cone and trapped region for each energy bin at this time. Do this for both energy and number flux.
         loss_cone_n_flux[t,:] = [mean(n_flux[t, E, lc_idxs])      for E = 1:16]
         trapped_n_flux[t,:]   = [mean(n_flux[t, E, trapped_idxs]) for E = 1:16]
-        
-        
     end
 
     # Noise removal - removing places that have low trapped counts that would artificially spike the ratio
@@ -523,13 +521,20 @@ end
 #                       ~~~~~~~~~~~~~~~~~~~~~~~~                       #
 ########################################################################
 function integrate_flux(event::Event; time = false, energy = false, pitch_angle = false,
-                        time_range = 1:event.n_datapoints,
+                        time_idxs = 1:event.n_datapoints, # index
                         pitch_angle_range = (0, 180), # deg
                         energy_range = (-Inf, Inf) # keV
-                        )
-    pa_range_idxs = pitch_angle_range[1] .<= event.pitch_angles .<= pitch_angle_range[2]
-    energy_range_idx = energy_range[1] .<= event.energy_bins_mean .<= energy_range[2]
+    )
+    # Guard input conditions
+    if length(time_idxs) < 2; @warn "Not enough datapoints to integrate (length(time_range) < 2)" ; return 0, 0; end
+    if energy_range[2] < energy_range[1]; energy_range = (energy_range[2], energy_range[1]); end # sort() method doesn't work with tuples
+    if pitch_angle_range[2] < pitch_angle_range[1]; pitch_angle_range = (pitch_angle_range[2], pitch_angle_range[1]); end # sort() method doesn't work with tuples
 
+    # Convert numerical ranges to index
+    pa_range_mask = pitch_angle_range[1] .<= event.pitch_angles .<= pitch_angle_range[2]
+    energy_range_mask = energy_range[1] .<= event.energy_bins_mean .<= energy_range[2]
+
+    # Get fluxes to integrate
     e_flux = copy(event.e_flux)
     n_flux = copy(event.n_flux)
 
@@ -540,31 +545,30 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
 
     # Do integrations in reverse order of their dimension (ie pitch angle, energy, then time). This prevents one integration from changing another.
     if pitch_angle == true
-       e_flux, n_flux = _integrate_over_pitch_angle(event, e_flux, n_flux, pa_range_idxs)
+       e_flux, n_flux = _integrate_over_pitch_angle(event, e_flux, n_flux, pa_range_mask)
        pa = 1
     end
 
     if energy == true
-        e_flux, n_flux = _integrate_over_energy(event, e_flux, n_flux, energy_range_idx)
+        e_flux, n_flux = _integrate_over_energy(event, e_flux, n_flux, energy_range_mask)
         e = 1
     end
 
     if time == true
-        e_flux, n_flux = _integrate_over_time(event, e_flux, n_flux, time_range)
+        e_flux, n_flux = _integrate_over_time(event, e_flux, n_flux, time_idxs)
         t = 1
     end
 
     return e_flux[t, e, pa], n_flux[t, e, pa]
 end
 
-function _integrate_over_pitch_angle(event::Event, e_flux, n_flux, pitch_angle_idxs)
+function _integrate_over_pitch_angle(event::Event, e_flux, n_flux, pitch_angle_mask)
     for t = 1:event.n_datapoints
-        idxs_to_integrate = findall(pitch_angle_idxs[t,:])
-
-        # Don't integrate if we don't have pitch angle coverage
+        idxs_to_integrate = findall(pitch_angle_mask[t,:])
+        # Don't integrate if we don't have pitch angle coverage - fill with zero
         if length(idxs_to_integrate) < 2
-            @warn "< 2 pitch angle bins in given range $pitch_angle_idxs at time index $t, filled with NaNs"
-            e_flux[t, :, :] .= NaN
+            e_flux[t, :, :] .= 0
+            n_flux[t, :, :] .= 0
             continue
         end
 
@@ -577,30 +581,38 @@ function _integrate_over_pitch_angle(event::Event, e_flux, n_flux, pitch_angle_i
     return e_flux, n_flux
 end
 
-function _integrate_over_energy(event::Event, e_flux, n_flux, energy_range)
+function _integrate_over_energy(event::Event, e_flux, n_flux, energy_mask)
+    idxs_to_integrate = findall(energy_mask)
+    # Don't integrate if we don't have pitch angle coverage
+    if length(idxs_to_integrate) < 2
+        @warn "Fewer than 2 energy bins in given energy range, returning 0"
+        e_flux[:, :, :] .= 0
+        n_flux[:, :, :] .= 0
+    end
+
     for t = 1:event.n_datapoints
         for α = 1:16
-            e_flux[t, :, α] .= integrate(event.energy_bins_mean[energy_range] ./ 1000, e_flux[t, energy_range, α], Trapezoidal())
-            n_flux[t, :, α] .= integrate(event.energy_bins_mean[energy_range] ./ 1000, n_flux[t, energy_range, α], Trapezoidal())
+            e_flux[t, :, α] .= integrate(event.energy_bins_mean[idxs_to_integrate] ./ 1000, e_flux[t, idxs_to_integrate, α], Trapezoidal())
+            n_flux[t, :, α] .= integrate(event.energy_bins_mean[idxs_to_integrate] ./ 1000, n_flux[t, idxs_to_integrate, α], Trapezoidal())
         end
     end
     return e_flux, n_flux
 end
 
-function _integrate_over_time(event::Event, e_flux, n_flux, time_range)
+function _integrate_over_time(event::Event, e_flux, n_flux, idxs_to_integrate)
     # Different behavior for 1-datapoint events or input where time range is only one index
-    if length(time_range) == 1
+    if length(idxs_to_integrate) == 1
         for t = 1:length(e_flux[:, 1, 1])
-            e_flux[t, :, :] = event.e_flux[time_range, :, :] .* 3 # T_spin ~= 3 seconds
-            n_flux[t, :, :] = event.n_flux[time_range, :, :] .* 3
+            e_flux[t, :, :] = event.e_flux[idxs_to_integrate, :, :] .* 3 # T_spin ~= 3 seconds
+            n_flux[t, :, :] = event.n_flux[idxs_to_integrate, :, :] .* 3
         end
         return e_flux, n_flux
     end
 
     for E = 1:16
         for α = 1:16
-            e_flux[:, E, α] .= integrate(event.time[time_range], e_flux[time_range, E, α], Trapezoidal())
-            n_flux[:, E, α] .= integrate(event.time[time_range], n_flux[time_range, E, α], Trapezoidal())
+            e_flux[:, E, α] .= integrate(event.time[idxs_to_integrate], e_flux[idxs_to_integrate, E, α], Trapezoidal())
+            n_flux[:, E, α] .= integrate(event.time[idxs_to_integrate], n_flux[idxs_to_integrate, E, α], Trapezoidal())
         end
     end
     return e_flux, n_flux
