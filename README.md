@@ -2,8 +2,11 @@
 A package for processing and interacting with data from the [UCLA Electron Losses and Fields Investigation (ELFIN)](https://elfin.igpp.ucla.edu/) CubeSats.
 
 ## Installation
-To use this library, download the .zip from GitHub and unpack it. This should give you a folder named `Julia_ELFIN_Tools`. Move this folder to a location of your convenience. Add these lines to any Julia script to access the functions:
+To use this library, download the .zip from GitHub and unpack it. This should give you a folder named `Julia_ELFIN_Tools`. Move this folder to a location of your convenience. 
 
+Before using the library, run `julia <path to Julia_ELFIN_Tools>/install_dependencies.jl` to install this library's package dependencies.
+
+Then, add these lines to any Julia script to use this library:
 ```
 include("<path to Julia_ELFIN_Tools folder>/Events.jl")
 include("<path to Julia_ELFIN_Tools folder>/Visualization.jl")

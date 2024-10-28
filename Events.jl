@@ -565,7 +565,7 @@ end
 function _integrate_over_pitch_angle(event::Event, e_flux, n_flux, pitch_angle_mask)
     for t = 1:event.n_datapoints
         idxs_to_integrate = findall(pitch_angle_mask[t,:])
-        # Don't integrate if we don't have pitch angle coverage - fill with zero
+        # Don't integrate if we don't have coverage - fill with zero
         if length(idxs_to_integrate) < 2
             e_flux[t, :, :] .= 0
             n_flux[t, :, :] .= 0
@@ -583,7 +583,7 @@ end
 
 function _integrate_over_energy(event::Event, e_flux, n_flux, energy_mask)
     idxs_to_integrate = findall(energy_mask)
-    # Don't integrate if we don't have pitch angle coverage
+    # Don't integrate if we don't have coverage
     if length(idxs_to_integrate) < 2
         @warn "Fewer than 2 energy bins in given energy range, returning 0"
         e_flux[:, :, :] .= 0
