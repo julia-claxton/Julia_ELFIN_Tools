@@ -38,6 +38,7 @@ struct Event
     observation_stop_idxs::Vector{Int}        # Indices of where observations periods end .................................... |
     kp::Vector{Float64}                       # 3-hour Kp index for each datapoint ........................................... |
     dst::Vector{Float64}                      # Hourly Dst index for each datapoint .......................................... | nT
+    data_reliable::Bool                      # Flag indicating if ELFIN was experiencing issues during the event ............ |
 
     # Spatial variable fields 
     time::Vector{Float64}                     # Time since event start for each datapoint .................................... | seconds
@@ -155,11 +156,19 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
         if warn == true; @warn "\033[93mcreate_event(): No data exists for end time $(old_end). Ending event at nearest observation ($(difference) s).\033[0m"; end
     end
     if start_datetime == stop_datetime
-        if warn == true; @warn "Event start and stop times are equal, n_datapoints = 1."; end
+        if warn == true; @warn "Event start and stop times are equal, adjusting window to include data."; end
+        start_datetime -= Second(1)
+        stop_datetime += Second(1)
     end
     if start_datetime > stop_datetime
         if warn == true; @warn "Start time later than stop time. No event created."; end
         return nothing
+    end
+    # Check for periods of bad data
+    data_reliable = true
+    if _event_contains_bad_data(data, start_datetime, stop_datetime) == true
+        if warn == true; @warn "Event contains unreliable data."; end
+        data_reliable = false
     end
     #################### END GUARD BLOCK ####################
 
@@ -310,7 +319,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
     #############################################################################
     # Create the Event object and return it
     return Event(
-        data["satellite"], name, duration, n_datapoints, n_observations, observation_start_idxs, observation_stop_idxs, kp, dst,
+        data["satellite"], name, duration, n_datapoints, n_observations, observation_start_idxs, observation_stop_idxs, kp, dst, data_reliable,
 
         time, time_datetime, position, L, MLT, 
         
@@ -327,7 +336,7 @@ function _load_data(science_data_path, position_data_path)
     position_data = np.load(position_data_path, allow_pickle=true)
 
     # Determine if data is from ELFIN-A or ELFIN-B
-    # Doing this because Julia can't read keys that are a single string >:(
+    # Doing this because Julia NPZ library can't read strings >:(
     ela = get(science_data, :ela)
     if ela[1] == true
         satellite = "A"
@@ -371,6 +380,31 @@ function _load_data(science_data_path, position_data_path)
                 "altitude"         => get(position_data, :altitude),
                 "position"         => get(position_data, :position) .* 6378 # Convert Re back to km
                 )
+end
+
+function _event_contains_bad_data(data, start_datetime, stop_datetime)
+    # See https://elfin.igpp.ucla.edu/data-notes for details on bad data ranges
+    bad_data_info = [DateTime("2022-01-03T01:10:00") DateTime("2022-01-03T01:16:00") "A" # Off-nominal EPD configuration on ELFIN-A
+
+                     DateTime("2022-06-18T00:00:00") DateTime("2022-07-05T00:00:00") "B" # ELFIN-B Flight Computer Page Fault
+                     DateTime("2022-05-31T00:00:00") DateTime("2022-06-14T00:00:00") "B"
+                     DateTime("2021-11-19T20:00:00") DateTime("2021-11-25T04:00:00") "B"
+
+                     DateTime("2022-01-14T23:00:00") DateTime("2022-01-16T00:00:00") "A" # SEP Event
+                     DateTime("2022-01-14T23:00:00") DateTime("2022-01-16T00:00:00") "B"
+                     DateTime("2021-10-28T15:00:00") DateTime("2021-11-04T11:00:00") "A"
+                     DateTime("2021-10-28T15:00:00") DateTime("2021-11-04T11:00:00") "B"
+                     
+                     DateTime("2020-09-26T09:22:00") DateTime("2020-09-28T08:12:00") "A"  # Low Energy Cutoff
+                     DateTime("2020-10-18T07:35:06") DateTime("2020-10-19T08:31:25") "B"
+                     DateTime("2021-01-27T03:54:40") DateTime("2021-02-23T01:56:23") "B"
+    ]
+    for i in 1:size(bad_data_info)[1]
+        if (bad_data_info[i,1] .≤ start_datetime .≤ bad_data_info[i,2]) && (data["satellite"] == bad_data_info[i,3])
+            return true
+        end
+    end
+    return false
 end
 
 function _timestamp_to_DateTime(times)
@@ -526,6 +560,7 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
                         energy_range = (-Inf, Inf) # keV
     )
     # Guard input conditions
+    if event.data_reliable == false; @warn "Event data is unreliable, aborting integration for event $(event.name)"; return nothing, nothing; end
     if length(time_idxs) < 2; @warn "Not enough datapoints to integrate (length(time_range) < 2)" ; return 0, 0; end
     if energy_range[2] < energy_range[1]; energy_range = (energy_range[2], energy_range[1]); end # sort() method doesn't work with tuples
     if pitch_angle_range[2] < pitch_angle_range[1]; pitch_angle_range = (pitch_angle_range[2], pitch_angle_range[1]); end # sort() method doesn't work with tuples
