@@ -548,6 +548,23 @@ function _calculate_Jprec_over_Jtrap(data, binned)
     data["Jprec_over_Jtrap"] = Jprec_over_Jtrap
 end
 
+function example_event()
+    # Returns a random example event from a curated list of science zone crossings.
+    #             Start                           Stop                            Satellite     Note
+    event_info = [DateTime("2021-02-02T01:58:00") DateTime("2021-02-02T02:01:00") "a"           # Blobby EMIC
+                  DateTime("2021-03-06T07:02:00") DateTime("2021-03-06T07:08:00") "b"           # 2 teardrop EMICs
+                  DateTime("2020-09-02T14:21:00") DateTime("2020-09-02T14:25:00") "b"           # Clear isotropy boundary
+                  DateTime("2020-09-10T13:02:00") DateTime("2020-09-10T13:05:00") "a"           # EMIC
+                  DateTime("2021-01-13T07:10:00") DateTime("2021-01-13T07:14:00") "a"           # Nothing intereseting
+                  DateTime("2020-01-08T05:44:00") DateTime("2020-01-08T05:47:00") "a"           # Chorus and IBe
+                  DateTime("2020-03-07T09:00:00") DateTime("2020-03-07T12:00:00") "a"           # EMIC
+                  DateTime("2021-10-14T08:00:00") DateTime("2021-10-14T08:30:00") "a"           # Plasmasheet and IBe
+                  DateTime("2021-10-14T20:00:00") DateTime("2021-10-14T23:30:00") "b"           # (Maybe) IBe and plasmasheet
+    ]
+    i = rand(1:size(event_info)[1]) # Event choice
+    return create_event(event_info[i, 1], event_info[i, 2], event_info[i, 3])
+end
+
 
 ########################################################################
 #                       ~~~~~~~~~~~~~~~~~~~~~~~~                       #
