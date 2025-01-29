@@ -10,6 +10,7 @@ using PyCall
 using DelimitedFiles
 using NumericalIntegration
 using BasicInterpolators
+using Glob
 
 """
 Events.jl
@@ -548,7 +549,7 @@ function _calculate_Jprec_over_Jtrap(data, binned)
     data["Jprec_over_Jtrap"] = Jprec_over_Jtrap
 end
 
-function example_event()
+function example_event(; choose_random = true)
     # Returns a random example event from a curated list of science zone crossings.
     #             Start                           Stop                            Satellite     Note
     event_info = [DateTime("2021-02-02T01:58:00") DateTime("2021-02-02T02:01:00") "a"           # Blobby EMIC
@@ -561,7 +562,15 @@ function example_event()
                   DateTime("2021-10-14T08:00:00") DateTime("2021-10-14T08:30:00") "a"           # Plasmasheet and IBe
                   DateTime("2021-10-14T20:00:00") DateTime("2021-10-14T23:30:00") "b"           # (Maybe) IBe and plasmasheet
     ]
-    i = rand(1:size(event_info)[1]) # Event choice
+
+    # Choose event randomly
+    i = rand(1:size(event_info)[1])
+
+    # Override random choice if user asks
+    if choose_random == false
+        i = 1
+    end
+    
     return create_event(event_info[i, 1], event_info[i, 2], event_info[i, 3])
 end
 
@@ -668,4 +677,25 @@ function _integrate_over_time(event::Event, e_flux, n_flux, idxs_to_integrate)
         end
     end
     return e_flux, n_flux
+end
+
+function all_elfin_science_dates_and_satellite_ids()
+# This function returns two vectors: one is a vector of Dates that contain every date for which science
+# data exists. There will be duplicates in this list, as ELFIN-A and ELFIN-B recording on the same date
+# are considered separately. The second return is a vector of Strings that are either "a" or "b". This
+# indicates which satellite was recording on the date with the same index in the first vector.
+    science_data_directory = "$(Julia_ELFIN_Tools_TOP_LEVEL)/data/processed_scientific_data"
+    @assert isdir(science_data_directory) "Julia_ELFIN_Tools filestructure is incorrect. Please redownload library or contact julia.claxton@colorado.edu"
+    science_datafiles = glob("*.npz", science_data_directory)
+    science_datafiles = replace.(science_datafiles, "$(science_data_directory)/" => "")
+
+    days_with_data_available = replace.(science_datafiles, 
+        "_ela.npz" => "",
+        "_elb.npz" => "",
+    )
+    days_with_data_available = Date.(days_with_data_available, "yyyymmdd")
+
+    satellites = string.([science_datafiles[i][end-4] for i = eachindex(science_datafiles)])
+
+    return days_with_data_available, satellites
 end

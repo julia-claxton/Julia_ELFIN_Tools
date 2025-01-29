@@ -1,3 +1,7 @@
+# Housekeeping
+const Julia_ELFIN_Tools_TOP_LEVEL = @__DIR__
+@assert endswith(Julia_ELFIN_Tools_TOP_LEVEL, "Julia_ELFIN_Tools")
+
 # Library includes
 using Statistics
 using LinearAlgebra
@@ -6,7 +10,7 @@ using Plots
 using Plots.PlotMeasures
 using ColorSchemes
 
-include("./Events.jl")
+include("$(Julia_ELFIN_Tools_TOP_LEVEL)/Events.jl")
 
 USE_VSCODE_PLOTS = false # This variable should be set to true if you are running Julia from VSCode. This tailors the plots to be a bit better when using VSCode.
 
