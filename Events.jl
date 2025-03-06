@@ -114,8 +114,8 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
         error("Satellite \"$(sat)\" not recognized.")
     end
 
-    science_data_path = "$Julia_ELFIN_Tools_TOP_LEVEL/data/processed_scientific_data/$(year)$(month)$(day)_el$(sat).npz"
-    position_data_path = "$Julia_ELFIN_Tools_TOP_LEVEL/data/processed_position_data/$(year)$(month)$(day)_el$(sat).npz"
+    science_data_path = "$Julia_ELFIN_Tools_TOP_LEVEL/data/processed_scientific_data/$(year)$(month)$(day)_el$(lowercase(sat)).npz"
+    position_data_path = "$Julia_ELFIN_Tools_TOP_LEVEL/data/processed_position_data/$(year)$(month)$(day)_el$(lowercase(sat)).npz"
     if !isfile(science_data_path)
         # Always warn as this is more critical
         @warn "\033[93mCould not find $(science_data_path).\033[0m"

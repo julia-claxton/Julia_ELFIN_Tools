@@ -29,13 +29,13 @@ function quicklook(event::Event; by = "index")
 # `by` kwarg determines what the x-axis of the plots should be and can take values of "index", "time", or "date".
     if event.n_datapoints == 1; @warn "n_datapoints = 1, no plot"; return nothing; end
     
-    energy_heatmap = energy_time_series(event,         by = by, show_plot = false)
-    lc_ratio       = J_over_J90_time_series(event, by = by, show_plot = false)
-    pad_heatmap    = pad_time_series(event,            by = by, show_plot = false)
-    L_shell        = L_MLT_time_series(event,              by = by, show_plot = false)
-    abs_sunset     = absolute_sunset(event,                     show_plot = false)
-    rel_sunset     = relative_sunset(event,                   show_plot = false)
-    mlt_l_path     = MLT_L_track(event,                         show_plot = false)
+    energy_heatmap = energy_time_series(          event, by = by, show_plot = false)
+    lc_ratio       = Jprec_over_Jtrap_time_series(event, by = by, show_plot = false)
+    pad_heatmap    = pad_time_series(             event, by = by, show_plot = false)
+    L_shell        = L_MLT_time_series(           event, by = by, show_plot = false)
+    abs_sunset     = absolute_sunset(             event, show_plot = false)
+    rel_sunset     = relative_sunset(             event, show_plot = false)
+    mlt_l_path     = MLT_L_track(                 event, show_plot = false)
 
     blank = plot(yticks = nothing, framestyle = :none)
 
@@ -60,6 +60,36 @@ end
 function quicklook(event::Nothing; by = "index")
     @warn "No event"
     return nothing
+end
+
+function plot_event(event::Event; colormap = :ice)
+    xtick_idxs = Int.(round.(LinRange(1, event.n_datapoints, 5)))
+    heatmap(1:event.n_datapoints, event.energy_bins_mean, log10.(event.Jprec_over_Jtrap'),
+        xlabel = "$(Date(event.time_datetime[1])) ELFIN-$(event.satellite)",
+        xticks = (xtick_idxs, Dates.format.(Time.(event.time_datetime[xtick_idxs]), "HH:MM:SS")),
+        xminorticks = true,
+
+        ylabel = "Energy (keV)",
+        ylims = (event.energy_bins_min[begin], event.energy_bins_max[end]),
+        yscale = :log10,
+        yminorticks = true,
+
+        colorbar_title = "\nLog10 Jprec/Jtrap",
+        colormap = colormap,
+        clims = (-1.25, .25),
+
+        leftmargin = 5mm,
+        rightmargin = 5mm,
+        
+        background_color_inside = RGB(.8, .8, .8),
+        background_color_outside = :transparent,
+        framestyle = :box,
+        tickdirection = :out,
+        aspect_ratio = (event.n_datapoints/(event.energy_bins_mean[end]-event.energy_bins_mean[begin])) * .2,
+        size = (2, .5) .* 350,
+        dpi = 300
+    )
+    return plot!()
 end
 
 function _strip_heatmap(z; colormap = cgrad(:inferno))
@@ -143,7 +173,8 @@ function energy_time_series(event::Event; by = "index", show_plot = true)
     return plot!()
 end
 
-function J_over_J90_time_series(event::Event; by = "index", show_plot = true)
+function Jprec_over_Jtrap_time_series(event::Event; by = "index", show_plot = true)
+    by = lowercase(by)
     if by == "index"
         x = eachindex(event.time)
         x_label = "Data Index"
@@ -300,7 +331,6 @@ function pad_time_series(event::Event; by = "index", show_plot = true)
     end
     return plot!()
 end
-
 
 function L_MLT_time_series(event::Event; by = "index", show_plot = true)
     if by == "index"
