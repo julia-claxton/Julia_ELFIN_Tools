@@ -157,10 +157,10 @@ event = create_event("2020-09-02_14:21:00_229.138_ELB")
 
 ### Data Processing Methods
 ```
-integrate_flux(Event event; Bool time = false, Bool pitch_angle = false, Bool energy = false, 
-               UnitRange time_range = 1:event.n_datapoints,
-               Tuple{Float64} energy_range_keV = (-Inf, Inf),
-               String pitch_angle_range = "full",
+integrate_flux(event::Event; time::Bool = false, pitch_angle::Bool = false, energy::Bool = false, 
+               time_range::UnitRange = 1:event.n_datapoints,
+               energy_range_keV::Tuple{Float64} = (-Inf, Inf),
+               pitch_angle_range::Tuple{Float64} = (0, 180),
                )
 ```
 Integrates the flux recorded by ELFIN with respect to time, energy, pitch angle, or any combination thereof. Specify which dimensions to integrate along setting the keyword arguments `time`, `energy`, `pitch angle` to `true` according to the dimensions to integrate along.
@@ -178,7 +178,7 @@ Arguments:
 
 * `pitch_angle`: Optional keyword argument, set to `true` to integrate flux over pitch angle. Removes the 1/str dimension from the flux data.
 
-* `pitch_angle_range`: Region to integrate pitch angle. Set to `"loss cone"` to integrate over the loss cone, `"anti loss cone"` for the anti loss cone, `"trapped"` for the trapped region, and `"full"` (default) to integrate over all available pitch angles.
+* `pitch_angle_range`: Region to integrate pitch angle. Defaults to integrating all available pitch angles.
 
 Returns:
 * `e_flux`: Energy flux integrated as specified by input arguments.
