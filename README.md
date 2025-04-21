@@ -87,16 +87,22 @@ The Event type contains several fields with metadata, location/time, and science
 | `avg_pitch_angles` | Pitch angle of each of ELFIN's look directions averaged over all timesteps. Mainly useful for short events. | degrees |
 | `avg_loss_cone_angle` | Average loss cone angle over full event. | degrees |
 | `avg_anti_loss_cone_angle` | Average anti loss cone angle over full event. | degrees |
-| `e_flux` | Electron energy flux at each timestep, energy channel, and look direction. Dimensions = [time, energy channel, pitch angle] | kev/(cm^2 str s MeV) |
-| `n_flux` | Electron number flux at each timestep, energy channel, and look direction. Dimensions = [time, energy channel, pitch angle] | #/(cm^2 str s MeV) |
-| `Jprec_over_Jperp` | Ratio of electron flux in the loss cone to flux in the trapped area at each time step and energy channel. Dimensions = [time, energy channel] |  |
+| `e_flux` | Electron energy flux at each timestep, energy channel, and look direction. Dimensions = [time, energy channel, pitch angle] | $\displaystyle \frac{\text{keV}}{\text{cm}^2 \text{ str s MeV}}$ |
+| `n_flux` | Electron number flux at each timestep, energy channel, and look direction. Dimensions = [time, energy channel, pitch angle] | $\displaystyle \frac{\#}{\text{cm}^2 \text{ str s MeV}}$ |
+| `Jprec_over_Jperp` | Ratio of electron flux in the loss cone to flux in the trapped area at each time step and energy channel. Dimensions = [time, energy channel] | unitless |
+| `relative_error` | Relative error of each measurement, as $\displaystyle \frac{\delta q}{q}$. Dimensions = [time, energy channel, pitch angle] |  |
 
 
 ## Provided Methods
 This library also provides a number of methods for interacting with the `Event` type. Methods are provided to create events, integrate the flux data, and visualize the data.
 
 ### Event Creation Methods
-`create_event(DateTime start, DateTime stop, String sat; Bool warn = false)` \
+```julia
+create_event(start::DateTime, stop::DateTime, sat::String;
+    warn::Bool = false,
+    relative_error_threshold::Float64 = Inf
+)
+```
 Creates an Event object from a start datetime, stop datetime, and satellite ID (either "a", "A", "b", or "B")
 
 Arguments:
@@ -106,19 +112,26 @@ Arguments:
 
 * `sat`: String determining whether to use ELFIN-A or ELFIN-B data. Allowed inputs are `"A"`, `"a"`, `"B"`, or `"b"`.
 
-* `warn`: Optional keyword. If `true`, print non-fatal issues to terminal for debugging purposes.
+* `warn`: Optional argument. If `true`, print non-fatal issues to terminal for debugging purposes.
+
+* `relative_error_threshold`: Optional argument. When set to a non-infinite value, any measurements with relative error greater than the provided value are set to zero.
 
 Returns:
 * Variable of type `Event` containing ELFIN data between specified times.
 
 Example Usage:
-```
+```julia
 event = create_event(DateTime("2020-09-02T14:21:00"), DateTime("2020-09-02T14:25:00"), "b")
 ```
 ---
 <br>
 
-`create_event(Date date, String sat; Bool warn = false)` \
+```julia
+create_event(date::Date, sat::String;
+    warn::Bool = false,
+    relative_error_threshold::Float64 = Inf
+)
+```
 Creates an Event object containing all data recorded by an ELFIN satellite on a given date.
 
 Arguments:
@@ -128,17 +141,24 @@ Arguments:
 
 * `warn`: Optional keyword. If `true`, print non-fatal issues to terminal for debugging purposes.
 
+* `relative_error_threshold`: Optional argument. When set to a non-infinite value, any measurements with relative error greater than the provided value are set to zero.
+
 Returns:
 * Variable of type `Event` containing ELFIN data on the specified date.
 
 Example Usage:
-```
+```julia
 event = create_event(Date("2020-09-02"), "b")
 ```
 ---
 <br>
 
-`create_event(String name; Bool warn = false)` \
+```julia
+create_event(String name;
+    warn::Bool = false,
+    relative_error_threshold::Float64 = Inf
+)
+```
 Creates an Event object based on the namestring of another event. You can access the name of an event using the `name` field.
 
 Arguments:
@@ -149,19 +169,24 @@ Arguments:
 Returns:
 * Variable of type `Event` containing ELFIN data specified by namestring.
 
+* `relative_error_threshold`: Optional argument. When set to a non-infinite value, any measurements with relative error greater than the provided value are set to zero.
+
 Example Usage:
-```
+```julia
 event = create_event("2020-09-02_14:21:00_229.138_ELB")
 ```
 ---
 
 ### Data Processing Methods
-```
-integrate_flux(event::Event; time::Bool = false, pitch_angle::Bool = false, energy::Bool = false, 
-               time_range::UnitRange = 1:event.n_datapoints,
-               energy_range_keV::Tuple{Float64} = (-Inf, Inf),
-               pitch_angle_range::Tuple{Float64} = (0, 180),
-               )
+```julia
+integrate_flux(event::Event;
+    time::Bool = false,
+    pitch_angle::Bool = false,
+    energy::Bool = false, 
+    time_range::UnitRange = 1:event.n_datapoints,
+    energy_range_keV::Tuple{Float64} = (-Inf, Inf),
+    pitch_angle_range::Tuple{Float64} = (0, 180)
+)
 ```
 Integrates the flux recorded by ELFIN with respect to time, energy, pitch angle, or any combination thereof. Specify which dimensions to integrate along setting the keyword arguments `time`, `energy`, `pitch angle` to `true` according to the dimensions to integrate along.
 
@@ -194,19 +219,23 @@ omnidirectional_energy_flux, omnidirectional_number_flux = integrate_flux(event,
 ---
 
 ### Event Visualization Methods
-`quicklook(Event event; String by = "index")`
-Generates a quick-look chart showing an overview of the data recorded during the event. Chart generation can sometimes be slow due to the number of subplots.
+```julia
+quicklook(event::Event;
+    by::String = "date"
+)
+```
+Generates a quick-look chart showing an overview of the data recorded during the event. Chart generation can sometimes be slow due to the number of subplots involved.
 
 Arguments:
 * `event`: Event to generate quicklook chart for.
 
-* `by`: For graphs in the quicklook that have a time axis, this optional keyword determines what the time axis will be. `"index"` (default) plots data by the timestep's index. `"time"` plots data by number of seconds elapsed since event start time, and `"date"` plots time series data by absolute date and time.
+* `by`: Optional argument. For graphs in the quicklook that have a time axis, this keyword determines what the time axis will be. `"index"` plots data by the timestep's index. `"time"` plots data by number of seconds elapsed since event start time, and `"date"` plots time series data by date and time.
 
 Returns:
 * None
 
 Example Usage:
-```
+```julia
 event = create_event(DateTime("2020-09-02T14:21:00"), DateTime("2020-09-02T14:25:00"), "b")
 quicklook(event)
 ```

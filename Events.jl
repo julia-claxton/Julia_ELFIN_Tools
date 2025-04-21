@@ -39,7 +39,7 @@ struct Event
     observation_stop_idxs::Vector{Int}        # Indices of where observations periods end .................................... |
     kp::Vector{Float64}                       # 3-hour Kp index for each datapoint ........................................... |
     dst::Vector{Float64}                      # Hourly Dst index for each datapoint .......................................... | nT
-    data_reliable::Bool                      # Flag indicating if ELFIN was experiencing issues during the event ............ |
+    data_reliable::Bool                      # Flag indicating if ELFIN was experiencing issues during the event ............. |
 
     # Spatial variable fields 
     time::Vector{Float64}                     # Time since event start for each datapoint .................................... | seconds
@@ -69,6 +69,7 @@ struct Event
     
     Jprec_over_Jtrap::Array{Float64}          # Ratio of electron flux in the loss cone to flux in the trapped area at each time step and energy channel.  | 
                                                   # Dimensions: [time, energy channel]
+    relative_error::Array{Float64}            # Relative error in flux data, δq/q ............................................ | unitless
 end
 
 
@@ -78,7 +79,10 @@ end
 #                       EVENT CREATION FUNCTIONS                       #
 #                       ~~~~~~~~~~~~~~~~~~~~~~~~                       #
 ########################################################################
-function create_event(name::String; warn = false)
+function create_event(name::String;
+    warn = false,
+    relative_error_threshold = Inf
+    )
 # Creates an Event based on the name string of another event
     separator_idxs = findall('_', name)
 
@@ -90,18 +94,24 @@ function create_event(name::String; warn = false)
     start_datetime = DateTime(date, time)
     stop_datetime   = DateTime(date, time + duration)
 
-    return create_event(start_datetime, stop_datetime, sat, warn = warn)
+    return create_event(start_datetime, stop_datetime, sat, warn = warn, relative_error_threshold = relative_error_threshold)
 end
 
-function create_event(date::Date, sat; warn = false)
+function create_event(date::Date, sat;
+    warn = false,
+    relative_error_threshold = Inf
+    )
 # Creates an Event object from a date and satellite name. Event covers all data recorded on the given date.
     start_datetime = DateTime(date, Time("00:00:00"))
     stop_datetime   = DateTime(date, Time("23:59:59"))
 
-    return create_event(start_datetime, stop_datetime, sat, warn = warn)
+    return create_event(start_datetime, stop_datetime, sat, warn = warn, relative_error_threshold = relative_error_threshold)
 end
 
-function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; warn = false)
+function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
+    warn = false,
+    relative_error_threshold = Inf
+    )
 # Creates an Event object from a start datetime, stop datetime, and satellite ID (either "a", "A", "b", or "B")
 
     #################### GUARD BLOCK ####################
@@ -299,7 +309,8 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
 
     ##########################################################################
     # Bin data into ELFIN's discrete look directions
-    binned = _bin_data(data, n_datapoints, indices_of_interest, warn)
+    ##########################################################################
+    binned = _bin_data(data, n_datapoints, indices_of_interest, warn, relative_error_threshold)
     if binned == nothing
         # Warning contained in _bin_data()
         return nothing
@@ -314,7 +325,6 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
     avg_loss_cone_angle = mean(data["loss_cone_angles"]) # Average loss cone angle over the observation period
     avg_anti_loss_cone_angle = mean(data["anti_loss_cone_angles"]) # Average anti loss cone angle over the observation period
 
-
     #############################################################################
     #                           FINISH EVENT CREATION                           #
     #############################################################################
@@ -326,7 +336,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat; wa
         
         binned["pitch_angles"], data["energy_bins_min"], data["energy_bins_mean"], data["energy_bins_max"], data["loss_cone_idxs"], data["anti_loss_cone_idxs"], data["loss_cone_angles"], data["anti_loss_cone_angles"], avg_pitch_angles, avg_loss_cone_angle, avg_anti_loss_cone_angle,
                  
-        binned["e_flux"], binned["n_flux"], data["Jprec_over_Jtrap"]
+        binned["e_flux"], binned["n_flux"], data["Jprec_over_Jtrap"], binned["relative_error"]
     )
 end
 
@@ -431,21 +441,21 @@ function _get_geomagnetic_indices(time_datetime)
     return results["dst"], results["kp"]
 end
 
-function _bin_data(data, n_datapoints, indices_of_interest, warn)
+function _bin_data(data, n_datapoints, indices_of_interest, warn, relative_error_threshold)
 # Bin pitch angle and flux data into ELFIN's discrete look directions
-    total_observations = length(data["fs_Epat_nflux"][:,1,1]) # Dimensions of data["fs_Epat_nflux"]: [time, pitch angle, energy channel]
+    # Get data from raw file
+    # Note: We are trimming NaNs that pad the pitch angle dimension on the first & last columns 
+    nflux          = data["fs_Epat_nflux"][indices_of_interest, begin+1:end-1, :] # Dimensions: [time, pitch angle, energy channel] Units: electrons / (cm^2 str s)
+    eflux          = data["fs_Epat_eflux"][indices_of_interest, begin+1:end-1, :] # Dimensions: [time, pitch angle, energy channel] Units: keV / (cm^2 str s)
+    pitch_angles   = data["fs_epa_spec"][indices_of_interest, begin+1:end-1]       # Dimensions: [time, pitch angle] Units: 
+    relative_error = data["fs_Epat_dfovf"][indices_of_interest, begin+1:end-1, :] # Dimensions: [time, pitch angle, energy channel] Units: unitless, δq/q
 
-    nflux        = zeros(total_observations, 16, 16) # Dimensions: [time, energy channel, pitch angle] Units: electrons / (cm^2 str s)
-    eflux        = zeros(total_observations, 16, 16) # Dimensions: [time, energy channel, pitch angle] Units: keV / (cm^2 str s)
-    pitch_angles = zeros(total_observations, 16)     # Dimensions: [time, pitch angle] Units: 
+    # Permute dimensions so the dimensions are [time, energy channel, pitch angle]
+    nflux = permutedims(nflux, [1, 3, 2])
+    eflux = permutedims(eflux, [1, 3, 2])
+    relative_error = permutedims(relative_error, [1, 3, 2])
 
-    for i = 1:total_observations
-        nflux[i,:,:] = (data["fs_Epat_nflux"][i, 2:end-1, :])' # Trim NaNs that pad the pitch angle dimension on the first & last columns. Transpose as well. Dimensions: [energy channel, pitch angle] This makes plotting easier: cols = pitch angle & rows = energy channel
-        eflux[i,:,:] = (data["fs_Epat_eflux"][i, 2:end-1, :])'    
-        pitch_angles[i,:] = data["fs_epa_spec"][i,2:end-1] # Trim corresponding pitch angles
-    end
-
-
+    # Check for NaN data
     if sum(isnan.(nflux)) ≠ 0
         if warn == true; @warn "\033[93m_bin_data(): n_flux data contains NaN.\033[0m"; end
         nflux[isnan.(nflux)] .= 0
@@ -459,16 +469,18 @@ function _bin_data(data, n_datapoints, indices_of_interest, warn)
         return nothing
     end
 
-
-    # Trim cleaned data to only the time of interest
-    nflux        = nflux[indices_of_interest, :, :]
-    eflux        = eflux[indices_of_interest, :, :]
-    pitch_angles = pitch_angles[indices_of_interest, :]
+    # Zero out readings above relative error threshold
+    too_uncertain_idxs = relative_error .> relative_error_threshold
+    nflux[too_uncertain_idxs] .= 0
+    eflux[too_uncertain_idxs] .= 0
 
     # Collect data into one structure for easy access elsewhere
-    binned = Dict("pitch_angles" => pitch_angles,
-                  "n_flux" => nflux,
-                  "e_flux" => eflux)
+    binned = Dict(
+        "pitch_angles" => pitch_angles,
+        "n_flux" => nflux,
+        "e_flux" => eflux,
+        "relative_error" => relative_error
+    )
     return binned
 end
 
@@ -549,7 +561,7 @@ function _calculate_Jprec_over_Jtrap(data, binned)
     data["Jprec_over_Jtrap"] = Jprec_over_Jtrap
 end
 
-function example_event(; choose_random = true)
+function example_event(; choose_random = true, relative_error_threshold = Inf)
     # Returns a random example event from a curated list of science zone crossings.
     #             Start                           Stop                            Satellite     Note
     event_info = [DateTime("2021-02-02T01:58:00") DateTime("2021-02-02T02:01:00") "a"           # Blobby EMIC
@@ -571,7 +583,7 @@ function example_event(; choose_random = true)
         i = 1
     end
     
-    return create_event(event_info[i, 1], event_info[i, 2], event_info[i, 3])
+    return create_event(event_info[i, 1], event_info[i, 2], event_info[i, 3], relative_error_threshold = relative_error_threshold)
 end
 
 

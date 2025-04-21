@@ -25,7 +25,7 @@ Written by Julia Claxton (julia.claxton@colorado.edu)
 Released under MIT License (see LICENSE.txt for full license)
 """
 
-function quicklook(event::Event; by = "index")
+function quicklook(event::Event; by = "date")
 # `by` kwarg determines what the x-axis of the plots should be and can take values of "index", "time", or "date".
     if event.n_datapoints == 1; @warn "n_datapoints = 1, no plot"; return nothing; end
     
