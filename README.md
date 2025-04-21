@@ -88,7 +88,7 @@ The Event type contains several fields with metadata, location/time, and science
 | `avg_loss_cone_angle` | Average loss cone angle over full event. | degrees |
 | `avg_anti_loss_cone_angle` | Average anti loss cone angle over full event. | degrees |
 | `e_flux` | Electron energy flux at each timestep, energy channel, and look direction. Dimensions = [time, energy channel, pitch angle] | $\displaystyle \frac{\text{keV}}{\text{cm}^2 \text{ str s MeV}}$ |
-| `n_flux` | Electron number flux at each timestep, energy channel, and look direction. Dimensions = [time, energy channel, pitch angle] | $\displaystyle \frac{\#}{\text{cm}^2 \text{ str s MeV}}$ |
+| `n_flux` | Electron number flux at each timestep, energy channel, and look direction. Dimensions = [time, energy channel, pitch angle] | $\displaystyle \frac{\text{number}}{\text{cm}^2 \text{ str s MeV}}$ |
 | `Jprec_over_Jperp` | Ratio of electron flux in the loss cone to flux in the trapped area at each time step and energy channel. Dimensions = [time, energy channel] | unitless |
 | `relative_error` | Relative error of each measurement, as $\displaystyle \frac{\delta q}{q}$. Dimensions = [time, energy channel, pitch angle] |  |
 
