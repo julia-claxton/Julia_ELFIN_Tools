@@ -25,10 +25,18 @@ Written by Julia Claxton (julia.claxton@colorado.edu)
 Released under MIT License (see LICENSE.txt for full license)
 """
 
-function quicklook(event::Event; by = "date")
+function quicklook(event::Event; by = nothing)
 # `by` kwarg determines what the x-axis of the plots should be and can take values of "index", "time", or "date".
     if event.n_datapoints == 1; @warn "n_datapoints = 1, no plot"; return nothing; end
     
+    # Auto-set x-axis if not user specified
+    if (by == nothing) && (event.n_observations == 1)
+        by = "date"
+    elseif (by == nothing) && (event.n_observations > 1)
+        by = "index"
+    end
+
+    # Create plots
     energy_heatmap = energy_time_series(          event, by = by, show_plot = false)
     lc_ratio       = Jprec_over_Jtrap_time_series(event, by = by, show_plot = false)
     pad_heatmap    = pad_time_series(             event, by = by, show_plot = false)
@@ -57,7 +65,7 @@ function quicklook(event::Event; by = "date")
     _display_plot()
 end
 
-function quicklook(event::Nothing; by = "index")
+function quicklook(event::Nothing; by = nothing)
     @warn "No event"
     return nothing
 end
@@ -150,7 +158,7 @@ function energy_time_series(event::Event; by = "index", show_plot = true)
         xlabel = x_label,
         ylabel = "Energy (MeV)",
         colorbar_title = "Log10 Energy Flux\n(keV/(cm² MeV s))",
-        clims = (5, 11.5),
+        clims = (5, 9),
         yticks = (log10.(energy[1:3:16]), round.(energy[1:3:16], sigdigits = 2)),
         margin = 5mm,
         size = (1.3, .33) .* 500

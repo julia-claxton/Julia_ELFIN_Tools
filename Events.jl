@@ -81,7 +81,7 @@ end
 ########################################################################
 function create_event(name::String;
     warn = false,
-    relative_error_threshold = Inf
+    maximum_relative_error = Inf
     )
 # Creates an Event based on the name string of another event
     separator_idxs = findall('_', name)
@@ -94,23 +94,23 @@ function create_event(name::String;
     start_datetime = DateTime(date, time)
     stop_datetime   = DateTime(date, time + duration)
 
-    return create_event(start_datetime, stop_datetime, sat, warn = warn, relative_error_threshold = relative_error_threshold)
+    return create_event(start_datetime, stop_datetime, sat, warn = warn, maximum_relative_error = maximum_relative_error)
 end
 
 function create_event(date::Date, sat;
     warn = false,
-    relative_error_threshold = Inf
+    maximum_relative_error = Inf
     )
 # Creates an Event object from a date and satellite name. Event covers all data recorded on the given date.
     start_datetime = DateTime(date, Time("00:00:00"))
     stop_datetime   = DateTime(date, Time("23:59:59"))
 
-    return create_event(start_datetime, stop_datetime, sat, warn = warn, relative_error_threshold = relative_error_threshold)
+    return create_event(start_datetime, stop_datetime, sat, warn = warn, maximum_relative_error = maximum_relative_error)
 end
 
 function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
     warn = false,
-    relative_error_threshold = Inf
+    maximum_relative_error = Inf
     )
 # Creates an Event object from a start datetime, stop datetime, and satellite ID (either "a", "A", "b", or "B")
 
@@ -310,7 +310,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
     ##########################################################################
     # Bin data into ELFIN's discrete look directions
     ##########################################################################
-    binned = _bin_data(data, n_datapoints, indices_of_interest, warn, relative_error_threshold)
+    binned = _bin_data(data, n_datapoints, indices_of_interest, warn, maximum_relative_error)
     if binned == nothing
         # Warning contained in _bin_data()
         return nothing
@@ -441,7 +441,7 @@ function _get_geomagnetic_indices(time_datetime)
     return results["dst"], results["kp"]
 end
 
-function _bin_data(data, n_datapoints, indices_of_interest, warn, relative_error_threshold)
+function _bin_data(data, n_datapoints, indices_of_interest, warn, maximum_relative_error)
 # Bin pitch angle and flux data into ELFIN's discrete look directions
     # Get data from raw file
     # Note: We are trimming NaNs that pad the pitch angle dimension on the first & last columns 
@@ -470,7 +470,7 @@ function _bin_data(data, n_datapoints, indices_of_interest, warn, relative_error
     end
 
     # Zero out readings above relative error threshold
-    too_uncertain_idxs = relative_error .> relative_error_threshold
+    too_uncertain_idxs = relative_error .> maximum_relative_error
     nflux[too_uncertain_idxs] .= 0
     eflux[too_uncertain_idxs] .= 0
 
@@ -561,7 +561,7 @@ function _calculate_Jprec_over_Jtrap(data, binned)
     data["Jprec_over_Jtrap"] = Jprec_over_Jtrap
 end
 
-function example_event(; choose_random = true, relative_error_threshold = Inf)
+function example_event(; choose_random = true, maximum_relative_error = Inf)
     # Returns a random example event from a curated list of science zone crossings.
     #             Start                           Stop                            Satellite     Note
     event_info = [DateTime("2021-02-02T01:58:00") DateTime("2021-02-02T02:01:00") "a"           # Blobby EMIC
@@ -570,8 +570,8 @@ function example_event(; choose_random = true, relative_error_threshold = Inf)
                   DateTime("2020-09-10T13:02:00") DateTime("2020-09-10T13:05:00") "a"           # EMIC
                   DateTime("2021-01-13T07:10:00") DateTime("2021-01-13T07:14:00") "a"           # Nothing intereseting
                   DateTime("2020-01-08T05:44:00") DateTime("2020-01-08T05:47:00") "a"           # Chorus and IBe
-                  DateTime("2020-03-07T09:00:00") DateTime("2020-03-07T12:00:00") "a"           # EMIC
-                  DateTime("2021-10-14T08:00:00") DateTime("2021-10-14T08:30:00") "a"           # Plasmasheet and IBe
+                  DateTime("2020-03-07T09:00:00") DateTime("2020-03-07T09:30:00") "a"           # EMIC
+                  DateTime("2021-10-14T08:11:00") DateTime("2021-10-14T08:20:00") "a"           # Plasmasheet and IBe
                   DateTime("2021-10-14T20:00:00") DateTime("2021-10-14T23:30:00") "b"           # (Maybe) IBe and plasmasheet
     ]
 
@@ -583,7 +583,7 @@ function example_event(; choose_random = true, relative_error_threshold = Inf)
         i = 1
     end
     
-    return create_event(event_info[i, 1], event_info[i, 2], event_info[i, 3], relative_error_threshold = relative_error_threshold)
+    return create_event(event_info[i, 1], event_info[i, 2], event_info[i, 3], maximum_relative_error = maximum_relative_error)
 end
 
 
@@ -647,8 +647,8 @@ function _integrate_over_pitch_angle(event::Event, e_flux, n_flux, pitch_angle_m
 
         α = event.pitch_angles[t, idxs_to_integrate]
         for E = 1:16
-            e_flux[t, E, :] .= 2π * integrate(α, e_flux[t, E, idxs_to_integrate] .* sind.(α), Trapezoidal())
-            n_flux[t, E, :] .= 2π * integrate(α, n_flux[t, E, idxs_to_integrate] .* sind.(α), Trapezoidal())
+            e_flux[t, E, :] .= 2π * integrate(deg2rad.(α), e_flux[t, E, idxs_to_integrate] .* sind.(α), Trapezoidal())
+            n_flux[t, E, :] .= 2π * integrate(deg2rad.(α), n_flux[t, E, idxs_to_integrate] .* sind.(α), Trapezoidal())
         end
     end
     return e_flux, n_flux
@@ -689,6 +689,157 @@ function _integrate_over_time(event::Event, e_flux, n_flux, idxs_to_integrate)
         end
     end
     return e_flux, n_flux
+end
+
+function absolute_error_of_integration(event::Event;
+    # TODO DESCRIPTION
+    
+    time = false,
+    time_idxs = 1:event.n_datapoints, # index
+
+    energy = false,
+    energy_range = (-Inf, Inf), # keV
+
+    pitch_angle = false,
+    pitch_angle_range = (0, 180) # deg
+    )
+
+    relative_error = relative_error_of_integration(event,
+        time = time,
+        time_idxs = time_idxs,
+
+        energy = energy,
+        energy_range = energy_range,
+
+        pitch_angle = pitch_angle,
+        pitch_angle_range = pitch_angle_range
+    )
+
+    integrated_e_flux, integrated_n_flux = integrate_flux(event,
+        time = time,
+        time_idxs = time_idxs,
+
+        energy = energy,
+        energy_range = energy_range,
+
+        pitch_angle = pitch_angle,
+        pitch_angle_range = pitch_angle_range
+    )
+
+    return relative_error .* integrated_e_flux, relative_error .* integrated_n_flux
+end
+
+function relative_error_of_integration(event::Event;
+    # TODO DESCRIPTION
+    
+    time = false,
+    time_idxs = 1:event.n_datapoints, # index
+
+    energy = false,
+    energy_range = (-Inf, Inf), # keV
+
+    pitch_angle = false,
+    pitch_angle_range = (0, 180) # deg
+    )
+    # Guard input conditions
+    if event.data_reliable == false
+        @warn "Event data is unreliable, aborting integration for event $(event.name)"
+        return nothing
+    end
+    if length(time_idxs) < 2
+        @warn "Not enough datapoints to integrate (length(time_range) < 2)"
+        return nothing
+    end
+    if (time == false) && (time_idxs ≠ 1:event.n_datapoints)
+        @warn "Integration time range set, but integration over time is disabled. Provided range is ignored."
+    end
+    if (energy == false) && (energy_range ≠ (-Inf, Inf))
+        @warn "Integration energy range set, but integration over energy is disabled. Provided range is ignored."
+    end
+    if (pitch_angle == false) && (pitch_angle_range ≠ (0, 180))
+        @warn "Integration pitch_angle range set, but integration over pitch_angle is disabled. Provided range is ignored."
+    end
+
+    # Sort tuples manually as sort() doesn't work for tuples
+    if energy_range[2] < energy_range[1]; energy_range = (energy_range[2], energy_range[1]); end 
+    if pitch_angle_range[2] < pitch_angle_range[1]; pitch_angle_range = (pitch_angle_range[2], pitch_angle_range[1]); end
+
+    # Allocate result
+    absolute_error = copy(event.relative_error) .* event.n_flux # Choice of number flux or energy flux is arbitrary, as the relative error is the same for both -- energy flux is just a constant multiple of number flux
+    absolute_error[isnan.(absolute_error)] .= 0 # Remove NaNs. NaN is where Φ = 0 and relative error is undefined.
+
+    # Convert numerical ranges of integration to indices
+    t_slice_to_integrate = copy(time_idxs)
+    E_slice_to_integrate = findall(energy_range[1] .<= event.energy_bins_mean .<= energy_range[2])
+    α_mask_to_integrate = pitch_angle_range[1] .<= event.pitch_angles .<= pitch_angle_range[2]
+
+    # Slices to return
+    t_slice_to_return = 1:event.n_datapoints
+    E_slice_to_return = 1:16
+    α_slice_to_return = 1:16
+
+    # Perform propagations
+    if pitch_angle == true
+        for t in 1:event.n_datapoints
+            α_slice_to_integrate = findall(α_mask_to_integrate[t,:])
+            [absolute_error[t,E,:] .= _propagate_error_through_integration(deg2rad.(event.avg_pitch_angles[α_slice_to_integrate]), absolute_error[t,E,α_slice_to_integrate], modification_factor = 2π .* sind.(event.avg_pitch_angles[α_slice_to_integrate])) for E in 1:16]
+        end
+        α_slice_to_return = 1
+    end
+
+    if energy == true
+        [absolute_error[t,:,α] .= _propagate_error_through_integration(event.energy_bins_mean[E_slice_to_integrate]./1000, absolute_error[t, E_slice_to_integrate,α]) for t in 1:event.n_datapoints, α in 1:16]
+        E_slice_to_return = 1
+    end
+
+    if time == true
+        [absolute_error[:,E,α] .= _propagate_error_through_integration(event.time[t_slice_to_integrate], absolute_error[t_slice_to_integrate, E, α]) for E in 1:16, α in 1:16]
+        t_slice_to_return = 1
+    end
+
+    # Get absolute error
+    absolute_error = absolute_error[t_slice_to_return, E_slice_to_return, α_slice_to_return]
+
+    # Get value of integration for calculation of relative rror
+    _, integrated_n_flux = integrate_flux(event,
+        time = time,
+        time_idxs = time_idxs,
+
+        energy = energy,
+        energy_range = energy_range,
+
+        pitch_angle = pitch_angle,
+        pitch_angle_range = pitch_angle_range
+    )
+
+    # Calculate relative error and return
+    relative_error = absolute_error ./ integrated_n_flux
+
+    # Replace NaN with Inf
+    # NaN implies Φ = 0, meaning relative error should be infinite. This matches the way the data was provided
+    # Need to do this differently for 1-element vectors (floats) vs. arrays because Julia is silly
+    if length(relative_error) > 1
+        relative_error[isnan.(relative_error)] .= Inf
+    else
+        if isnan(relative_error); relative_error = Inf; end
+    end
+    return relative_error
+end
+
+function _propagate_error_through_integration(integration_axis, absolute_error; modification_factor = ones(size(integration_axis)))
+    # Two of t_idxs, E_idxs, α_idxs should be singletons (ie, a single index),
+    # while the remaining one should be a range of indices with length > 2
+
+    # Φ(t,E,α) = Number flux
+    # f = ∫ϕ dx for some arbitrary axis x ∈ [t, E, α]
+    # δ = absolute error
+
+    x = copy(integration_axis)
+    δΦ = copy(absolute_error)
+
+    N = length(x)
+    δf = (1/2) * norm([ (x[clamp(i+1, 1, N)] - x[clamp(i-1, 1, N)]) * δΦ[i] * modification_factor[i] for i in 1:N])
+    return δf
 end
 
 function all_elfin_science_dates_and_satellite_ids()
