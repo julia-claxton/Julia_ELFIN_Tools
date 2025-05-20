@@ -602,89 +602,67 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
     if energy_range[2] < energy_range[1]; energy_range = (energy_range[2], energy_range[1]); end # sort() method doesn't work with tuples
     if pitch_angle_range[2] < pitch_angle_range[1]; pitch_angle_range = (pitch_angle_range[2], pitch_angle_range[1]); end # sort() method doesn't work with tuples
 
-    # Convert numerical ranges to index
+    # Convert numerical ranges to masks
     pa_range_mask = pitch_angle_range[1] .<= event.pitch_angles .<= pitch_angle_range[2]
     energy_range_mask = energy_range[1] .<= event.energy_bins_mean .<= energy_range[2]
 
-    # Get fluxes to integrate
+    # Cut out regions the user doesn't care about by zeroing everything besides the provided integration ranges
     e_flux = copy(event.e_flux)
+    e_flux[setdiff(1:event.n_datapoints, time_idxs),:,:] .= 0
+    e_flux[:,.!energy_range_mask,:] .= 0
+    [e_flux[:,:,.!pa_range_mask[t,:]] .= 0 for t in 1:event.n_datapoints]
+
     n_flux = copy(event.n_flux)
+    n_flux[setdiff(1:event.n_datapoints, time_idxs),:,:] .= 0
+    n_flux[:,.!energy_range_mask,:] .= 0
+    [n_flux[:,:,.!pa_range_mask[t,:]] .= 0 for t in 1:event.n_datapoints]
 
-    # Matrix slice indices. We use the full dimension if it hasn't been integrated. Slice is changed to [1] if it has in order to flatten result.
-    pa = 1:16
-    e = 1:16
-    t = 1:event.n_datapoints
-
-    # Do integrations
-    if pitch_angle == true
-       e_flux, n_flux = _integrate_over_pitch_angle(event, e_flux, n_flux, pa_range_mask)
-       pa = 1
-    end
-
-    if energy == true
-        e_flux, n_flux = _integrate_over_energy(event, e_flux, n_flux, energy_range_mask)
-        e = 1
-    end
-
+    # Integrate out each desired dimension
     if time == true
-        e_flux, n_flux = _integrate_over_time(event, e_flux, n_flux, time_idxs)
-        t = 1
+        Δt = diff([event.time..., event.time[end] + 3]) # TODO use spin time variable
+        [e_flux[:,E,α] .*= Δt for E in 1:16, α in 1:16]
+        [n_flux[:,E,α] .*= Δt for E in 1:16, α in 1:16]
     end
-
-    return e_flux[t, e, pa], n_flux[t, e, pa]
-end
-
-function _integrate_over_pitch_angle(event::Event, e_flux, n_flux, pitch_angle_mask)
-    for t = 1:event.n_datapoints
-        idxs_to_integrate = findall(pitch_angle_mask[t,:])
-
-        # Get solid angle span (ΔΩ) of each pitch angle bin
-        α_center = event.pitch_angles[t, idxs_to_integrate]
-        α_min = α_center .- 11.25 # EPD FOV is 22.5 deg, thus half that is the half cone angle spanned by each measurement
-        α_max = α_center .+ 11.25
-        ΔΩ = 2π .* [cosd(α_min[i]) - cosd(α_max[i]) for i in eachindex(α_center)]
-        
-        # Integrate
-        for E = 1:16
-            e_flux[t, E, :] .= sum(e_flux[t, E, idxs_to_integrate] .* ΔΩ)
-            n_flux[t, E, :] .= sum(n_flux[t, E, idxs_to_integrate] .* ΔΩ)
+    if energy == true
+        ΔE = (event.energy_bins_max .- event.energy_bins_min) ./ 1000 # Divide by 1000 to get MeV
+        [e_flux[t,:,α] .*= ΔE for t in 1:event.n_datapoints, α in 1:16]
+        [n_flux[t,:,α] .*= ΔE for t in 1:event.n_datapoints, α in 1:16]
+    end
+    if pitch_angle == true
+        for t in 1:event.n_datapoints
+            # Get solid angle span (ΔΩ) of each pitch angle bin at this time
+            α_center = event.pitch_angles[t, :]
+            α_min = α_center .- 11.25 # EPD FOV is 22.5 deg, thus half that is the half cone angle spanned by each measurement
+            α_max = α_center .+ 11.25
+            ΔΩ = 2π .* [cosd(α_min[i]) - cosd(α_max[i]) for i in eachindex(α_center)]
+            
+            [e_flux[t,E,:] .*= ΔΩ for E in 1:16]
+            [n_flux[t,E,:] .*= ΔΩ for E in 1:16]
         end
     end
-    return e_flux, n_flux
-end
 
-function _integrate_over_energy(event::Event, e_flux, n_flux, energy_mask)
-    idxs_to_integrate = findall(energy_mask)
+    # Sum up each desired dimension
+    t_idxs_to_return = 1:event.n_datapoints
+    e_idxs_to_return = 1:16
+    pa_idxs_to_return = 1:16
 
-    # Get energy span (in MeV) of each bin
-    ΔE = (event.energy_bins_max .- event.energy_bins_min) ./ 1000
-
-    for t = 1:event.n_datapoints
-        for α = 1:16
-            e_flux[t, :, α] .= sum(e_flux[t, idxs_to_integrate, α] .* ΔE)
-            n_flux[t, :, α] .= sum(n_flux[t, idxs_to_integrate, α] .* ΔE)
-        end
+    if time == true; 
+        e_flux = sum(e_flux, dims = 1)
+        n_flux = sum(n_flux, dims = 1)
+        t_idxs_to_return = 1
     end
-    return e_flux, n_flux
-end
-
-function _integrate_over_time(event::Event, e_flux, n_flux, idxs_to_integrate)
-    # Different behavior for 1-datapoint events or input where time range is only one index
-    if length(idxs_to_integrate) == 1
-        for t = 1:length(e_flux[:, 1, 1])
-            e_flux[t, :, :] = event.e_flux[idxs_to_integrate, :, :] .* 3 # T_spin ~= 3 seconds
-            n_flux[t, :, :] = event.n_flux[idxs_to_integrate, :, :] .* 3
-        end
-        return e_flux, n_flux
+    if energy == true; 
+        e_flux = sum(e_flux, dims = 2)
+        n_flux = sum(n_flux, dims = 2)
+        e_idxs_to_return = 1
+    end
+    if pitch_angle == true; 
+        e_flux = sum(e_flux, dims = 3)
+        n_flux = sum(n_flux, dims = 3)
+        pa_idxs_to_return = 1
     end
 
-    for E = 1:16
-        for α = 1:16
-            e_flux[:, E, α] .= integrate(event.time[idxs_to_integrate], e_flux[idxs_to_integrate, E, α], Trapezoidal())
-            n_flux[:, E, α] .= integrate(event.time[idxs_to_integrate], n_flux[idxs_to_integrate, E, α], Trapezoidal())
-        end
-    end
-    return e_flux, n_flux
+    return e_flux[t_idxs_to_return, e_idxs_to_return, pa_idxs_to_return], n_flux[t_idxs_to_return, e_idxs_to_return, pa_idxs_to_return]
 end
 
 function absolute_error_of_integration(event::Event;
@@ -775,6 +753,16 @@ function relative_error_of_integration(event::Event;
     α_slice_to_return = 1:16
 
     # Perform propagations
+    if time == true
+        Δt = diff([event.time..., event.time[end] + 3]) # TODO use spin time variable
+        [absolute_error[:,E,α] .= _propagate_error_through_exact_integration(Δt[t_slice_to_integrate], absolute_error[t_slice_to_integrate, E, α]) for E in 1:16, α in 1:16]
+        t_slice_to_return = 1
+    end
+    if energy == true
+        ΔE = (event.energy_bins_max .- event.energy_bins_min) ./ 1000
+        [absolute_error[t,:,α] .= _propagate_error_through_exact_integration(ΔE, absolute_error[t, E_slice_to_integrate,α]) for t in 1:event.n_datapoints, α in 1:16]
+        E_slice_to_return = 1
+    end
     if pitch_angle == true
         for t in 1:event.n_datapoints
             α_slice_to_integrate = findall(α_mask_to_integrate[t,:])
@@ -791,21 +779,7 @@ function relative_error_of_integration(event::Event;
         α_slice_to_return = 1
     end
 
-    if energy == true
-        ΔE = (event.energy_bins_max .- event.energy_bins_min) ./ 1000
-        [absolute_error[t,:,α] .= _propagate_error_through_exact_integration(ΔE, absolute_error[t, E_slice_to_integrate,α]) for t in 1:event.n_datapoints, α in 1:16]
-        E_slice_to_return = 1
-    end
-
-    if time == true
-        [absolute_error[:,E,α] .= _propagate_error_through_trapezoidal_integration(event.time[t_slice_to_integrate], absolute_error[t_slice_to_integrate, E, α]) for E in 1:16, α in 1:16]
-        t_slice_to_return = 1
-    end
-
-    # Get absolute error
-    absolute_error = absolute_error[t_slice_to_return, E_slice_to_return, α_slice_to_return]
-
-    # Get value of integration for calculation of relative rror
+    # Get values for relative error
     _, integrated_n_flux = integrate_flux(event,
         time = time,
         time_idxs = time_idxs,
@@ -818,6 +792,7 @@ function relative_error_of_integration(event::Event;
     )
 
     # Calculate relative error and return
+    absolute_error = absolute_error[t_slice_to_return, E_slice_to_return, α_slice_to_return]
     relative_error = absolute_error ./ integrated_n_flux
 
     # Replace NaN with Inf
@@ -841,19 +816,6 @@ function _propagate_error_through_exact_integration(Δx, absolute_error)
     return δf
 end
 
-
-function _propagate_error_through_trapezoidal_integration(integration_axis, absolute_error)
-    # Φ(t,E,α) = Number flux
-    # f = ∫ϕ dx for some arbitrary axis x ∈ [t, E, α]
-    # δ = absolute error
-
-    x = copy(integration_axis)
-    δΦ = copy(absolute_error)
-
-    N = length(x)
-    δf = (1/2) * norm([ (x[clamp(i+1, 1, N)] - x[clamp(i-1, 1, N)]) * δΦ[i] for i in 1:N])
-    return δf
-end
 
 function all_elfin_science_dates_and_satellite_ids()
 # This function returns two vectors: one is a vector of Dates that contain every date for which science
