@@ -1,0 +1,29 @@
+var_name,dimension ,description
+ela_pef_et_time,[time(n)],measurements time
+ela_pef_Et_nflux,"[time(n), energy(16)]",nflux at each energy channel
+ela_pef_Et_eflux,"[time(n), energy(16)]",eflux at each energy channel
+ela_pef_Et_dfovf,"[time(n), energy(16)]",err df/f at each energy channel
+ela_pef_energies_mean,[energy(16)],mean energies for each energy channel
+ela_pef_energies_min,[energy(16)],minimum energies for each energy channel
+ela_pef_energies_max,[energy(16)],maximum energies for each energy channel
+ela_pef_pa,[time(n)],pitch angle in deg
+ela_pef_spinphase,[time(n)],spin phase in deg
+ela_pef_sectnum,[time(n)],sector number at collection time
+ela_pef_nspinsinsum,[time(n)],number of spins summed
+ela_pef_nsectors,[time(n)],sector number
+ela_pef_sect2add,[time(n)],sector number to add for phase delay correction
+ela_pef_spinph2add,[time(n)],spin phase to add for phgase delay corection
+ela_pef_hs_time,[time(n_halfspin)],time for half-spin resolution data
+ela_pef_hs_Epat_nflux,"[time(n_halfspin), PA(8+2), energy(16)]",half-spin resolution nflux
+ela_pef_hs_Epat_eflux,"[time(n_halfspin), PA(8+2), energy(16)]",half-spin resolution eflux
+ela_pef_hs_Epat_dfovf,"[time(n_halfspin), PA(8+2), energy(16)]",half-spin resolution error
+ela_pef_hs_LCdeg,[time(n_halfspin)],half-spin resolution loss cone in deg
+ela_pef_hs_antiLCdeg,[time(n_halfspin)],half-spin resolution anti loss cone in deg
+ela_pef_hs_epa_spec,"[time(n_halfspin), PA(8+2)]",half-spin reolustion pitch angle
+ela_pef_fs_time,[time(n_halfspin)],time for full-spin resolution data
+ela_pef_fs_Epat_nflux,"[time(n_fullspin), PA(16+2), energy(16)]",full-spin resolution nflux
+ela_pef_fs_Epat_eflux,"[time(n_fullspin), PA(16+2), energy(16)]",full-spin resolution eflux
+ela_pef_fs_Epat_dfovf,"[time(n_fullspin), PA(16+2), energy(16)]",full-spin resolution error
+ela_pef_fs_LCdeg,[time(n_fullspin)],full-spin resolution loss cone in deg
+ela_pef_fs_antiLCdeg,[time(n_fullspin)],full-spin resolution antiloss cone in deg
+ela_pef_fs_epa_spec,"[time(n_fullspin), PA(16+2)]",full-spin resolution pitch angle

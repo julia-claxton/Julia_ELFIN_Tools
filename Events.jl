@@ -184,7 +184,6 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
     #################### END GUARD BLOCK ####################
 
 
-
     #################### BEGIN EVENT CREATION ####################
     indices_of_interest = (data["fs_time"] .>= start_datetime) .& (data["fs_time"] .<= stop_datetime)
     data["indices_of_interest"] = indices_of_interest # Save to data dict in case needed for debugging. Data dict will keep it hidden from end user.

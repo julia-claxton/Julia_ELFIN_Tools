@@ -124,6 +124,7 @@ function _strip_heatmap(x, y, z; colormap = cgrad(:inferno), bg = :black)
         colormap = colormap,
         framestyle = :grid,
         grid = true,
+        tickdirection = :out,
         xlims = (x_min, x_max),
         ylims = (y_min, y_max),
         aspect_ratio = (x_range / y_range) * .15,
@@ -296,6 +297,7 @@ function pad_time_series(event::Event; by = "index", show_plot = true)
         markershape = :square,
         markersize = (distance_between_bins ./ 5) .+ 1,
         markerstrokewidth = 0,
+        tickdirection = :out,
 
         aspect_ratio = ((time[end-1] - time[1]) / 180) * .15,
         leftmargin = 8mm,
@@ -377,7 +379,8 @@ function L_MLT_time_series(event::Event; by = "index", show_plot = true)
 
         aspect_ratio = (x_range / y_range) * .15,
         framestyle = :box,
-        leftmargin = -5.2mm
+        leftmargin = -5.2mm,
+        tickdirection = :out
     )
     # Add date ticks if needed
     if by == "date"
@@ -407,7 +410,8 @@ function L_MLT_time_series(event::Event; by = "index", show_plot = true)
             aspect_ratio = (x_range / 24) * .15,
             label = "",
             linewidth = 1.5,
-            linecolor = RGBA(0,0,0,.3)
+            linecolor = RGBA(0,0,0,.3),
+            tickdirection = :out
         )
     end
 
