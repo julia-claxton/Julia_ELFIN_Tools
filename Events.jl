@@ -615,7 +615,7 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
     e = 1:16
     t = 1:event.n_datapoints
 
-    # Do integrations in reverse order of their dimension (ie pitch angle, energy, then time). This prevents one integration from changing another.
+    # Do integrations
     if pitch_angle == true
        e_flux, n_flux = _integrate_over_pitch_angle(event, e_flux, n_flux, pa_range_mask)
        pa = 1
@@ -637,17 +637,17 @@ end
 function _integrate_over_pitch_angle(event::Event, e_flux, n_flux, pitch_angle_mask)
     for t = 1:event.n_datapoints
         idxs_to_integrate = findall(pitch_angle_mask[t,:])
-        # Don't integrate if we don't have coverage - fill with zero
-        if length(idxs_to_integrate) < 2
-            e_flux[t, :, :] .= 0
-            n_flux[t, :, :] .= 0
-            continue
-        end
 
-        α = event.pitch_angles[t, idxs_to_integrate]
+        # Get solid angle span (ΔΩ) of each pitch angle bin
+        α_center = event.pitch_angles[t, idxs_to_integrate]
+        α_min = α_center .- 11.25 # EPD FOV is 22.5 deg, thus half that is the half cone angle spanned by each measurement
+        α_max = α_center .+ 11.25
+        ΔΩ = 2π .* [cosd(α_min[i]) - cosd(α_max[i]) for i in eachindex(α_center)]
+        
+        # Integrate
         for E = 1:16
-            e_flux[t, E, :] .= 2π * integrate(deg2rad.(α), e_flux[t, E, idxs_to_integrate] .* sind.(α), Trapezoidal())
-            n_flux[t, E, :] .= 2π * integrate(deg2rad.(α), n_flux[t, E, idxs_to_integrate] .* sind.(α), Trapezoidal())
+            e_flux[t, E, :] .= sum(e_flux[t, E, idxs_to_integrate] .* ΔΩ)
+            n_flux[t, E, :] .= sum(n_flux[t, E, idxs_to_integrate] .* ΔΩ)
         end
     end
     return e_flux, n_flux
@@ -655,17 +655,14 @@ end
 
 function _integrate_over_energy(event::Event, e_flux, n_flux, energy_mask)
     idxs_to_integrate = findall(energy_mask)
-    # Don't integrate if we don't have coverage
-    if length(idxs_to_integrate) < 2
-        @warn "Fewer than 2 energy bins in given energy range, returning 0"
-        e_flux[:, :, :] .= 0
-        n_flux[:, :, :] .= 0
-    end
+
+    # Get energy span (in MeV) of each bin
+    ΔE = (event.energy_bins_max .- event.energy_bins_min) ./ 1000
 
     for t = 1:event.n_datapoints
         for α = 1:16
-            e_flux[t, :, α] .= integrate(event.energy_bins_mean[idxs_to_integrate] ./ 1000, e_flux[t, idxs_to_integrate, α], Trapezoidal())
-            n_flux[t, :, α] .= integrate(event.energy_bins_mean[idxs_to_integrate] ./ 1000, n_flux[t, idxs_to_integrate, α], Trapezoidal())
+            e_flux[t, :, α] .= sum(e_flux[t, idxs_to_integrate, α] .* ΔE)
+            n_flux[t, :, α] .= sum(n_flux[t, idxs_to_integrate, α] .* ΔE)
         end
     end
     return e_flux, n_flux
@@ -781,18 +778,27 @@ function relative_error_of_integration(event::Event;
     if pitch_angle == true
         for t in 1:event.n_datapoints
             α_slice_to_integrate = findall(α_mask_to_integrate[t,:])
-            [absolute_error[t,E,:] .= _propagate_error_through_integration(deg2rad.(event.avg_pitch_angles[α_slice_to_integrate]), absolute_error[t,E,α_slice_to_integrate], modification_factor = 2π .* sind.(event.avg_pitch_angles[α_slice_to_integrate])) for E in 1:16]
+
+            # Get solid angle span (ΔΩ) of each pitch angle bin
+            α_center = event.pitch_angles[t, α_slice_to_integrate]
+            α_min = α_center .- 11.25 # EPD FOV is 22.5 deg, thus half that is the half cone angle spanned by each measurement
+            α_max = α_center .+ 11.25
+            ΔΩ = 2π .* [cosd(α_min[i]) - cosd(α_max[i]) for i in eachindex(α_center)]
+
+            # Propagate
+            [absolute_error[t,E,:] .= _propagate_error_through_exact_integration(ΔΩ, absolute_error[t, E, α_slice_to_integrate]) for E in 1:16]
         end
         α_slice_to_return = 1
     end
 
     if energy == true
-        [absolute_error[t,:,α] .= _propagate_error_through_integration(event.energy_bins_mean[E_slice_to_integrate]./1000, absolute_error[t, E_slice_to_integrate,α]) for t in 1:event.n_datapoints, α in 1:16]
+        ΔE = (event.energy_bins_max .- event.energy_bins_min) ./ 1000
+        [absolute_error[t,:,α] .= _propagate_error_through_exact_integration(ΔE, absolute_error[t, E_slice_to_integrate,α]) for t in 1:event.n_datapoints, α in 1:16]
         E_slice_to_return = 1
     end
 
     if time == true
-        [absolute_error[:,E,α] .= _propagate_error_through_integration(event.time[t_slice_to_integrate], absolute_error[t_slice_to_integrate, E, α]) for E in 1:16, α in 1:16]
+        [absolute_error[:,E,α] .= _propagate_error_through_trapezoidal_integration(event.time[t_slice_to_integrate], absolute_error[t_slice_to_integrate, E, α]) for E in 1:16, α in 1:16]
         t_slice_to_return = 1
     end
 
@@ -825,10 +831,18 @@ function relative_error_of_integration(event::Event;
     return relative_error
 end
 
-function _propagate_error_through_integration(integration_axis, absolute_error; modification_factor = ones(size(integration_axis)))
-    # Two of t_idxs, E_idxs, α_idxs should be singletons (ie, a single index),
-    # while the remaining one should be a range of indices with length > 2
+function _propagate_error_through_exact_integration(Δx, absolute_error)
+    # Φ(t,E,α) = Number flux
+    # f = ∫ϕ dx for some arbitrary axis x ∈ [t, E, α]
+    # δ = absolute error
 
+    δΦ = copy(absolute_error)
+    δf = norm(Δx .* δΦ)
+    return δf
+end
+
+
+function _propagate_error_through_trapezoidal_integration(integration_axis, absolute_error)
     # Φ(t,E,α) = Number flux
     # f = ∫ϕ dx for some arbitrary axis x ∈ [t, E, α]
     # δ = absolute error
@@ -837,7 +851,7 @@ function _propagate_error_through_integration(integration_axis, absolute_error; 
     δΦ = copy(absolute_error)
 
     N = length(x)
-    δf = (1/2) * norm([ (x[clamp(i+1, 1, N)] - x[clamp(i-1, 1, N)]) * δΦ[i] * modification_factor[i] for i in 1:N])
+    δf = (1/2) * norm([ (x[clamp(i+1, 1, N)] - x[clamp(i-1, 1, N)]) * δΦ[i] for i in 1:N])
     return δf
 end
 
