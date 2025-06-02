@@ -629,16 +629,9 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
         [n_flux[t,:,α] .*= ΔE for t in 1:event.n_datapoints, α in 1:16]
     end
     if pitch_angle == true
-        for t in 1:event.n_datapoints
-            # Get solid angle span (ΔΩ) of each pitch angle bin at this time
-            α_center = event.pitch_angles[t, :]
-            α_min = α_center .- 11.25 # EPD FOV is 22.5 deg, thus half that is the half cone angle spanned by each measurement
-            α_max = α_center .+ 11.25
-            ΔΩ = 2π .* [cosd(α_min[i]) - cosd(α_max[i]) for i in eachindex(α_center)]
-            
-            [e_flux[t,E,:] .*= ΔΩ for E in 1:16]
-            [n_flux[t,E,:] .*= ΔΩ for E in 1:16]
-        end
+        geometric_factor = 0.13 # cm^2 str
+        [e_flux[t,E,:] .*= geometric_factor for t in 1:event.n_datapoints, E in 1:16]
+        [n_flux[t,E,:] .*= geometric_factor for t in 1:event.n_datapoints, E in 1:16]
     end
 
     # Sum up each desired dimension
