@@ -758,16 +758,10 @@ function relative_error_of_integration(event::Event;
     end
     if pitch_angle == true
         for t in 1:event.n_datapoints
-            α_slice_to_integrate = findall(α_mask_to_integrate[t,:])
-
-            # Get solid angle span (ΔΩ) of each pitch angle bin
-            α_center = event.pitch_angles[t, α_slice_to_integrate]
-            α_min = α_center .- 11.25 # EPD FOV is 22.5 deg, thus half that is the half cone angle spanned by each measurement
-            α_max = α_center .+ 11.25
-            ΔΩ = 2π .* [cosd(α_min[i]) - cosd(α_max[i]) for i in eachindex(α_center)]
-
             # Propagate
-            [absolute_error[t,E,:] .= _propagate_error_through_exact_integration(ΔΩ, absolute_error[t, E, α_slice_to_integrate]) for E in 1:16]
+            α_slice_to_integrate = findall(α_mask_to_integrate[t,:])
+            geometric_factor = 0.13 # cm2 str
+            [absolute_error[t,E,:] .= _propagate_error_through_exact_integration(geometric_factor, absolute_error[t, E, α_slice_to_integrate]) for E in 1:16]
         end
         α_slice_to_return = 1
     end
