@@ -2,6 +2,12 @@
 const Julia_ELFIN_Tools_TOP_LEVEL = @__DIR__
 @assert endswith(Julia_ELFIN_Tools_TOP_LEVEL, "Julia_ELFIN_Tools")
 
+const ELFIN_SPIN_TIME = 2.8125 # seconds
+const ELFIN_GEOMETRIC_FACTOR = 0.13 # cm2 str
+const ELFIN_EPD_FOV = 22.5 # Full cone angle, deg
+const ELFIN_EPD_AREA = ELFIN_GEOMETRIC_FACTOR / (2π * (1 - cosd.(ELFIN_EPD_FOV/2))) # cm2
+const ELFIN_EPD_SOLID_ANGLE = ELFIN_GEOMETRIC_FACTOR / ELFIN_EPD_AREA # str
+
 # Library includes
 using Statistics
 using LinearAlgebra
@@ -619,7 +625,7 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
 
     # Integrate out each desired dimension
     if time == true
-        Δt = diff([event.time..., event.time[end] + 3]) # TODO use spin time variable
+        Δt = diff([event.time..., event.time[end] + ELFIN_SPIN_TIME])
         [e_flux[:,E,α] .*= Δt for E in 1:16, α in 1:16]
         [n_flux[:,E,α] .*= Δt for E in 1:16, α in 1:16]
     end
@@ -629,9 +635,8 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
         [n_flux[t,:,α] .*= ΔE for t in 1:event.n_datapoints, α in 1:16]
     end
     if pitch_angle == true
-        geometric_factor = 0.13 # cm^2 str
-        [e_flux[t,E,:] .*= geometric_factor for t in 1:event.n_datapoints, E in 1:16]
-        [n_flux[t,E,:] .*= geometric_factor for t in 1:event.n_datapoints, E in 1:16]
+        [e_flux[t,E,:] .*= ELFIN_EPD_SOLID_ANGLE for t in 1:event.n_datapoints, E in 1:16]
+        [n_flux[t,E,:] .*= ELFIN_EPD_SOLID_ANGLE for t in 1:event.n_datapoints, E in 1:16]
     end
 
     # Sum up each desired dimension
@@ -747,7 +752,7 @@ function relative_error_of_integration(event::Event;
 
     # Perform propagations
     if time == true
-        Δt = diff([event.time..., event.time[end] + 3]) # TODO use spin time variable
+        Δt = diff([event.time..., event.time[end] + ELFIN_SPIN_TIME])
         [absolute_error[:,E,α] .= _propagate_error_through_exact_integration(Δt[t_slice_to_integrate], absolute_error[t_slice_to_integrate, E, α]) for E in 1:16, α in 1:16]
         t_slice_to_return = 1
     end
@@ -760,8 +765,7 @@ function relative_error_of_integration(event::Event;
         for t in 1:event.n_datapoints
             # Propagate
             α_slice_to_integrate = findall(α_mask_to_integrate[t,:])
-            geometric_factor = 0.13 # cm2 str
-            [absolute_error[t,E,:] .= _propagate_error_through_exact_integration(geometric_factor, absolute_error[t, E, α_slice_to_integrate]) for E in 1:16]
+            [absolute_error[t,E,:] .= _propagate_error_through_exact_integration(ELFIN_EPD_SOLID_ANGLE, absolute_error[t, E, α_slice_to_integrate]) for E in 1:16]
         end
         α_slice_to_return = 1
     end
