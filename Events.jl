@@ -2,10 +2,10 @@
 const Julia_ELFIN_Tools_TOP_LEVEL = @__DIR__
 @assert endswith(Julia_ELFIN_Tools_TOP_LEVEL, "Julia_ELFIN_Tools")
 
-const ELFIN_SPIN_TIME = 2.8125 # seconds
-const ELFIN_GEOMETRIC_FACTOR = 0.13 # cm2 str
+const ELFIN_SPIN_PERIOD = 2.8125 # seconds
+const ELFIN_GEOMETRIC_FACTOR = 0.15 # EPD-E, cm2 str
 const ELFIN_EPD_FOV = 22.5 # Full cone angle, deg
-const ELFIN_EPD_AREA = ELFIN_GEOMETRIC_FACTOR / (2π * (1 - cosd.(ELFIN_EPD_FOV/2))) # cm2
+const ELFIN_EPD_AREA = 1 # cm2
 const ELFIN_EPD_SOLID_ANGLE = ELFIN_GEOMETRIC_FACTOR / ELFIN_EPD_AREA # str
 
 # Library includes
@@ -604,7 +604,6 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
     )
     # Guard input conditions
     if event.data_reliable == false; @warn "Event data is unreliable, aborting integration for event $(event.name)"; return nothing, nothing; end
-    if length(time_idxs) < 2; @warn "Not enough datapoints to integrate (length(time_range) < 2)" ; return 0, 0; end
     if energy_range[2] < energy_range[1]; energy_range = (energy_range[2], energy_range[1]); end # sort() method doesn't work with tuples
     if pitch_angle_range[2] < pitch_angle_range[1]; pitch_angle_range = (pitch_angle_range[2], pitch_angle_range[1]); end # sort() method doesn't work with tuples
 
@@ -625,9 +624,9 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
 
     # Integrate out each desired dimension
     if time == true
-        Δt = diff([event.time..., event.time[end] + ELFIN_SPIN_TIME])
-        [e_flux[:,E,α] .*= Δt for E in 1:16, α in 1:16]
-        [n_flux[:,E,α] .*= Δt for E in 1:16, α in 1:16]
+        Δt = diff([event.time..., event.time[end] + ELFIN_SPIN_PERIOD])
+        [e_flux[:,E,α] .*= (Δt/16) for E in 1:16, α in 1:16]
+        [n_flux[:,E,α] .*= (Δt/16) for E in 1:16, α in 1:16]
     end
     if energy == true
         ΔE = (event.energy_bins_max .- event.energy_bins_min) ./ 1000 # Divide by 1000 to get MeV
@@ -718,10 +717,6 @@ function relative_error_of_integration(event::Event;
         @warn "Event data is unreliable, aborting integration for event $(event.name)"
         return nothing
     end
-    if length(time_idxs) < 2
-        @warn "Not enough datapoints to integrate (length(time_range) < 2)"
-        return nothing
-    end
     if (time == false) && (time_idxs ≠ 1:event.n_datapoints)
         @warn "Integration time range set, but integration over time is disabled. Provided range is ignored."
     end
@@ -752,7 +747,7 @@ function relative_error_of_integration(event::Event;
 
     # Perform propagations
     if time == true
-        Δt = diff([event.time..., event.time[end] + ELFIN_SPIN_TIME])
+        Δt = diff([event.time..., event.time[end] + ELFIN_SPIN_PERIOD]) ./ 16 # Every t,E,α bin covers only 1/16 of the spin period
         [absolute_error[:,E,α] .= _propagate_error_through_exact_integration(Δt[t_slice_to_integrate], absolute_error[t_slice_to_integrate, E, α]) for E in 1:16, α in 1:16]
         t_slice_to_return = 1
     end
