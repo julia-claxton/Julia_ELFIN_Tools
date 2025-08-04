@@ -155,11 +155,11 @@ function energy_time_series(event::Event; by = "index", show_plot = true)
     _strip_heatmap(x, log10.(energy), log10.(e_flux'), colormap = :ice)
 
     plot!(
-        title = "Pitch Angle Integrated Flux",
+        title = "Omnidirectional Flux",
         xlabel = x_label,
         ylabel = "Energy (MeV)",
         colorbar_title = "Log10 Energy Flux\n(keV/(cm² MeV s))",
-        clims = (5, 9),
+        clims = (4, 8.5),
         yticks = (log10.(energy[1:3:16]), round.(energy[1:3:16], sigdigits = 2)),
         margin = 5mm,
         size = (1.3, .33) .* 500

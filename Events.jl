@@ -12,7 +12,7 @@ const ELFIN_EPD_SOLID_ANGLE = ELFIN_GEOMETRIC_FACTOR / ELFIN_EPD_AREA # str
 using Statistics
 using LinearAlgebra
 using Dates
-using PyCall
+using NPZ
 using DelimitedFiles
 using NumericalIntegration
 using BasicInterpolators
@@ -347,55 +347,62 @@ end
 
 function _load_data(science_data_path, position_data_path)
 # Load ELFIN data from cleaned .npz into a dictionary
-    np = pyimport("numpy")
-    science_data = np.load(science_data_path,   allow_pickle=true)
-    position_data = np.load(position_data_path, allow_pickle=true)
+    science_data = npzread(science_data_path)
+    position_data = npzread(position_data_path)
 
     # Determine if data is from ELFIN-A or ELFIN-B
     # Doing this because Julia NPZ library can't read strings >:(
-    ela = get(science_data, :ela)
-    if ela[1] == true
+    ela = science_data["ela"]
+    if ela == true
         satellite = "A"
     else
         satellite = "B"
     end
 
-    return Dict("satellite"        => satellite,
-                "et_time"          => _timestamp_to_DateTime(get(science_data, :et_time)),
-                "hs_time"          => _timestamp_to_DateTime(get(science_data, :hs_time)),
-                "fs_time"          => _timestamp_to_DateTime(get(science_data, :fs_time)),
-                "Et_nflux"         => get(science_data, :Et_nflux),
-                "Et_eflux"         => get(science_data, :Et_eflux),
-                "Et_dfovf"         => get(science_data, :Et_dfovf),
-                "energy_bins_min"  => get(science_data, :energy_bins_min),
-                "energy_bins_mean" => get(science_data, :energy_bins_mean),
-                "energy_bins_max"  => get(science_data, :energy_bins_max),
-                "pa"               => get(science_data, :pa),
-                "spinphase"        => get(science_data, :spinphase),
-                "sectnum"          => get(science_data, :sectnum),
-                "Tspin"            => get(science_data, :Tspin),
-                "hs_Epat_nflux"    => get(science_data, :hs_Epat_nflux),
-                "hs_Epat_eflux"    => get(science_data, :hs_Epat_eflux),
-                "hs_Epat_dfovf"    => get(science_data, :hs_Epat_dfovf),
-                "hs_LCdeg"         => get(science_data, :hs_LCdeg),
-                "hs_antiLCdeg"     => get(science_data, :hs_antiLCdeg),
-                "hs_epa_spec"      => get(science_data, :hs_epa_spec),
-                "fs_Epat_nflux"    => get(science_data, :fs_Epat_nflux),
-                "fs_Epat_eflux"    => get(science_data, :fs_Epat_eflux),
-                "fs_Epat_dfovf"    => get(science_data, :fs_Epat_dfovf),
-                "fs_LCdeg"         => get(science_data, :fs_LCdeg),
-                "fs_antiLCdeg"     => get(science_data, :fs_antiLCdeg),
-                "fs_epa_spec"      => get(science_data, :fs_epa_spec),
-                "nspinsinsum"      => get(science_data, :nspinsinsum),
-                "nsectors"         => get(science_data, :nsectors),
-                "sect2add"         => get(science_data, :sect2add),
-                "spinph2add"       => get(science_data, :spinph2add),
-                "state_time"       => _timestamp_to_DateTime(get(position_data, :state_time)),
-                "L"                => abs.(vec(get(position_data, :L))),
-                "MLT"              => get(position_data, :MLT),
-                "altitude"         => get(position_data, :altitude),
-                "position"         => get(position_data, :position) .* 6378 # Convert Re back to km
-                )
+    # Parse time into DateTimes for et, hs, fs, and state
+    et_time = DateTime.(science_data["year"], science_data["month"], science_data["day"], science_data["et_hour"], science_data["et_minute"], science_data["et_second"], science_data["et_millisecond"])
+    hs_time = DateTime.(science_data["year"], science_data["month"], science_data["day"], science_data["hs_hour"], science_data["hs_minute"], science_data["hs_second"], science_data["hs_millisecond"])
+    fs_time = DateTime.(science_data["year"], science_data["month"], science_data["day"], science_data["fs_hour"], science_data["fs_minute"], science_data["fs_second"], science_data["fs_millisecond"])
+    state_time = DateTime.(position_data["year"], position_data["month"], position_data["day"], position_data["state_time_hour"], position_data["state_time_minute"], position_data["state_time_second"], position_data["state_time_millisecond"])
+
+    # Return data dict
+    return Dict(
+        "satellite"        => satellite,
+        "et_time"          => et_time,
+        "hs_time"          => hs_time,
+        "fs_time"          => fs_time,
+        "Et_nflux"         => science_data["Et_nflux"],
+        "Et_eflux"         => science_data["Et_eflux"],
+        "Et_dfovf"         => science_data["Et_dfovf"],
+        "energy_bins_min"  => science_data["energy_bins_min"],
+        "energy_bins_mean" => science_data["energy_bins_mean"],
+        "energy_bins_max"  => science_data["energy_bins_max"],
+        "pa"               => science_data["pa"],
+        "spinphase"        => science_data["spinphase"],
+        "sectnum"          => science_data["sectnum"],
+        "Tspin"            => science_data["Tspin"],
+        "hs_Epat_nflux"    => science_data["hs_Epat_nflux"],
+        "hs_Epat_eflux"    => science_data["hs_Epat_eflux"],
+        "hs_Epat_dfovf"    => science_data["hs_Epat_dfovf"],
+        "hs_LCdeg"         => science_data["hs_LCdeg"],
+        "hs_antiLCdeg"     => science_data["hs_antiLCdeg"],
+        "hs_epa_spec"      => science_data["hs_epa_spec"],
+        "fs_Epat_nflux"    => science_data["fs_Epat_nflux"],
+        "fs_Epat_eflux"    => science_data["fs_Epat_eflux"],
+        "fs_Epat_dfovf"    => science_data["fs_Epat_dfovf"],
+        "fs_LCdeg"         => science_data["fs_LCdeg"],
+        "fs_antiLCdeg"     => science_data["fs_antiLCdeg"],
+        "fs_epa_spec"      => science_data["fs_epa_spec"],
+        "nspinsinsum"      => science_data["nspinsinsum"],
+        "nsectors"         => science_data["nsectors"],
+        "sect2add"         => science_data["sect2add"],
+        "spinph2add"       => science_data["spinph2add"],
+        "state_time"       => state_time,
+        "L"                => abs.(vec(position_data["L"])),
+        "MLT"              => position_data["MLT"],
+        "altitude"         => position_data["altitude"],
+        "position"         => position_data["position"] .* 6378 # Convert Re back to km
+    )
 end
 
 function _event_contains_bad_data(data, start_datetime, stop_datetime)
