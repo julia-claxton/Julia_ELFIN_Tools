@@ -17,7 +17,7 @@ using DelimitedFiles
 using NumericalIntegration
 using BasicInterpolators
 using Glob
-# TODO hs resolution
+
 """
 Events.jl
 
@@ -45,7 +45,8 @@ struct Event
     observation_stop_idxs::Vector{Int}        # Indices of where observations periods end .................................... |
     kp::Vector{Float64}                       # 3-hour Kp index for each datapoint ........................................... |
     dst::Vector{Float64}                      # Hourly Dst index for each datapoint .......................................... | nT
-    data_reliable::Bool                      # Flag indicating if ELFIN was experiencing issues during the event ............. |
+    data_reliable::Bool                       # Flag indicating if ELFIN was experiencing issues during the event ............ |
+    data_type::String                         # "fs" = full-spin resolution, "hs" = half-spin resolution ..................... |
 
     # Spatial variable fields 
     time::Vector{Float64}                     # Time since event start for each datapoint .................................... | seconds
@@ -86,6 +87,7 @@ end
 #                       ~~~~~~~~~~~~~~~~~~~~~~~~                       #
 ########################################################################
 function create_event(name::String;
+    data_type = "fs", # "fs" for full spin, "hs" for half-spin
     warn = false,
     maximum_relative_error = Inf
     )
@@ -100,21 +102,23 @@ function create_event(name::String;
     start_datetime = DateTime(date, time)
     stop_datetime   = DateTime(date, time + duration)
 
-    return create_event(start_datetime, stop_datetime, sat, warn = warn, maximum_relative_error = maximum_relative_error)
+    return create_event(start_datetime, stop_datetime, sat, warn = warn, maximum_relative_error = maximum_relative_error, data_type = data_type)
 end
 
 function create_event(date::Date, sat;
+    data_type = "fs", # "fs" for full spin, "hs" for half-spin
     warn = false,
-    maximum_relative_error = Inf
+    maximum_relative_error = Inf,
     )
 # Creates an Event object from a date and satellite name. Event covers all data recorded on the given date.
     start_datetime = DateTime(date, Time("00:00:00"))
     stop_datetime   = DateTime(date, Time("23:59:59"))
 
-    return create_event(start_datetime, stop_datetime, sat, warn = warn, maximum_relative_error = maximum_relative_error)
+    return create_event(start_datetime, stop_datetime, sat, warn = warn, maximum_relative_error = maximum_relative_error, data_type = data_type)
 end
 
 function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
+    data_type = "fs", # "fs" for full spin, "hs" for half-spin
     warn = false,
     maximum_relative_error = Inf
     )
@@ -143,15 +147,16 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
         return nothing
     end
     data = _load_data(science_data_path, position_data_path)
+    data["data_type"] = data_type
 
     # Check bounds
-    time_from_start = data["fs_time"] .- start_datetime
-    time_from_end   = data["fs_time"] .- stop_datetime
+    time_from_start = data["$(data_type)_time"] .- start_datetime
+    time_from_end   = data["$(data_type)_time"] .- stop_datetime
     # Warn if either the start or stop time is outside a recording period and set to nearest available time
     if min(abs.(time_from_start)...) >= Second(2) # If the nearest time is more than 2 seconds away. This means ~10 missed observations at ELFIN's sampling about every .2 seconds.
         _, idx = findmin(abs.(time_from_start))
         old_start = start_datetime
-        start_datetime = data["fs_time"][idx] # Set start to nearest time we have data for.
+        start_datetime = data["$(data_type)_time"][idx] # Set start to nearest time we have data for.
         difference = time_from_start[idx].value / 1000
         if difference > 0
             difference = "+" * string(difference)
@@ -163,7 +168,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
     if min(abs.(time_from_end)...) >= Second(2) # If the nearest time is more than 2 seconds away. This means ~10 missed observations at ELFIN's sampling about every .2 seconds.
         _, idx = findmin(abs.(time_from_end))
         old_end = stop_datetime
-        stop_datetime = data["fs_time"][idx] # Set start to nearest time we have data for.
+        stop_datetime = data["$(data_type)_time"][idx] # Set start to nearest time we have data for.
         difference = time_from_end[idx].value / 1000
         if difference > 0
             difference = "+" * string(difference)
@@ -191,8 +196,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
 
 
     #################### BEGIN EVENT CREATION ####################
-    indices_of_interest = (data["fs_time"] .>= start_datetime) .& (data["fs_time"] .<= stop_datetime)
-    data["indices_of_interest"] = indices_of_interest # Save to data dict in case needed for debugging. Data dict will keep it hidden from end user.
+    indices_of_interest = start_datetime .≤ data["$(data_type)_time"] .≤ stop_datetime
     n_datapoints = sum(indices_of_interest)
     if n_datapoints == 0
         if warn == true; @warn "\033[93mNo data exists between start time and end time (Δt = $(stop_datetime - start_datetime)), no event created.\033[0m"; end
@@ -200,7 +204,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
     end
 
     # Get science time grid
-    time_datetime = data["fs_time"][indices_of_interest]
+    time_datetime = data["$(data_type)_time"][indices_of_interest]
     duration = 3 + ((time_datetime[end] - time_datetime[1]).value) / 1000 # Units: seconds. Adding three because each datapoint represents the start of a ~three second recording interval
     time = time_datetime .- time_datetime[1] # Float time since start
     time  = [time[i].value for i = eachindex(time)] ./ 1000 # Convert to float. Units: seconds
@@ -335,7 +339,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
     #############################################################################
     # Create the Event object and return it
     return Event(
-        data["satellite"], name, duration, n_datapoints, n_observations, observation_start_idxs, observation_stop_idxs, kp, dst, data_reliable,
+        data["satellite"], name, duration, n_datapoints, n_observations, observation_start_idxs, observation_stop_idxs, kp, dst, data_reliable, data_type,
 
         time, time_datetime, position, L, MLT, 
         
@@ -457,10 +461,10 @@ function _bin_data(data, n_datapoints, indices_of_interest, warn, maximum_relati
 # Bin pitch angle and flux data into ELFIN's discrete look directions
     # Get data from raw file
     # Note: We are trimming NaNs that pad the pitch angle dimension on the first & last columns 
-    nflux          = data["fs_Epat_nflux"][indices_of_interest, begin+1:end-1, :] # Dimensions: [time, pitch angle, energy channel] Units: electrons / (cm^2 str s)
-    eflux          = data["fs_Epat_eflux"][indices_of_interest, begin+1:end-1, :] # Dimensions: [time, pitch angle, energy channel] Units: keV / (cm^2 str s)
-    pitch_angles   = data["fs_epa_spec"][indices_of_interest, begin+1:end-1]       # Dimensions: [time, pitch angle] Units: 
-    relative_error = data["fs_Epat_dfovf"][indices_of_interest, begin+1:end-1, :] # Dimensions: [time, pitch angle, energy channel] Units: unitless, δq/q
+    nflux          = data["$(data["data_type"])_Epat_nflux"][indices_of_interest, begin+1:end-1, :] # Dimensions: [time, pitch angle, energy channel] Units: electrons / (cm^2 str s)
+    eflux          = data["$(data["data_type"])_Epat_eflux"][indices_of_interest, begin+1:end-1, :] # Dimensions: [time, pitch angle, energy channel] Units: keV / (cm^2 str s)
+    pitch_angles   = data["$(data["data_type"])_epa_spec"][indices_of_interest, begin+1:end-1]       # Dimensions: [time, pitch angle] Units: 
+    relative_error = data["$(data["data_type"])_Epat_dfovf"][indices_of_interest, begin+1:end-1, :] # Dimensions: [time, pitch angle, energy channel] Units: unitless, δq/q
 
     # Permute dimensions so the dimensions are [time, energy channel, pitch angle]
     nflux = permutedims(nflux, [1, 3, 2])
@@ -499,8 +503,8 @@ end
 function _calculate_loss_cones(data, binned, n_datapoints, indices_of_interest)
 # Calculate loss cones for an observation period
     # Get loss cone angles - loss cone angle is only given at each half rotation, so we have to propagate it out to all data points
-    loss_cone_angles = data["fs_LCdeg"][indices_of_interest]
-    anti_loss_cone_angles = data["fs_antiLCdeg"][indices_of_interest]
+    loss_cone_angles = data["$(data["data_type"])_LCdeg"][indices_of_interest]
+    anti_loss_cone_angles = data["$(data["data_type"])_antiLCdeg"][indices_of_interest]
 
     # Get indices of loss and anti-loss cones. The direction of LC/ALC depends on hemisphere.
     loss_cone_idxs      = []
@@ -539,7 +543,7 @@ function _calculate_Jprec_over_Jtrap(data, binned)
         lc_idxs = data["loss_cone_idxs"][t]
         lc_pitch_angles = pitch_angles[t,:][lc_idxs]
 
-        trapped_idxs = setdiff(1:16, data["loss_cone_idxs"][t], data["anti_loss_cone_idxs"][t])
+        trapped_idxs = setdiff(1:size(pitch_angles)[2], data["loss_cone_idxs"][t], data["anti_loss_cone_idxs"][t])
         trapped_pitch_angles = pitch_angles[t,:][trapped_idxs]
 
         # Calculate coverage of the loss cone
@@ -617,6 +621,7 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
     # Convert numerical ranges to masks
     pa_range_mask = pitch_angle_range[1] .<= event.pitch_angles .<= pitch_angle_range[2]
     energy_range_mask = energy_range[1] .<= event.energy_bins_mean .<= energy_range[2]
+    n_pa_bins = size(event.pitch_angles)[2] # Number of pitch angle bins. = 16 for fs data, 8 for hs data
 
     # Cut out regions the user doesn't care about by zeroing everything besides the provided integration ranges
     e_flux = copy(event.e_flux)
@@ -630,15 +635,20 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
     [n_flux[:,:,.!pa_range_mask[t,:]] .= 0 for t in 1:event.n_datapoints]
 
     # Integrate out each desired dimension
+    if event.data_type == "fs"
+        time_of_last_datapoint = ELFIN_SPIN_PERIOD
+    elseif event.data_type == "hs"
+        time_of_last_datapoint = ELFIN_SPIN_PERIOD / 2
+    end
     if time == true
-        Δt = diff([event.time..., event.time[end] + ELFIN_SPIN_PERIOD])
-        [e_flux[:,E,α] .*= (Δt/16) for E in 1:16, α in 1:16]
-        [n_flux[:,E,α] .*= (Δt/16) for E in 1:16, α in 1:16]
+        Δt = diff([event.time..., event.time[end] + time_of_last_datapoint])
+        [e_flux[:,E,α] .*= (Δt/16) for E in 1:16, α in 1:n_pa_bins]
+        [n_flux[:,E,α] .*= (Δt/16) for E in 1:16, α in 1:n_pa_bins]
     end
     if energy == true
         ΔE = (event.energy_bins_max .- event.energy_bins_min) ./ 1000 # Divide by 1000 to get MeV
-        [e_flux[t,:,α] .*= ΔE for t in 1:event.n_datapoints, α in 1:16]
-        [n_flux[t,:,α] .*= ΔE for t in 1:event.n_datapoints, α in 1:16]
+        [e_flux[t,:,α] .*= ΔE for t in 1:event.n_datapoints, α in 1:n_pa_bins]
+        [n_flux[t,:,α] .*= ΔE for t in 1:event.n_datapoints, α in 1:n_pa_bins]
     end
     if pitch_angle == true
         [e_flux[t,E,:] .*= ELFIN_EPD_SOLID_ANGLE for t in 1:event.n_datapoints, E in 1:16]
@@ -648,7 +658,7 @@ function integrate_flux(event::Event; time = false, energy = false, pitch_angle 
     # Sum up each desired dimension
     t_idxs_to_return = 1:event.n_datapoints
     e_idxs_to_return = 1:16
-    pa_idxs_to_return = 1:16
+    pa_idxs_to_return = 1:n_pa_bins
 
     if time == true; 
         e_flux = sum(e_flux, dims = 1)
@@ -734,6 +744,8 @@ function relative_error_of_integration(event::Event;
         @warn "Integration pitch_angle range set, but integration over pitch_angle is disabled. Provided range is ignored."
     end
 
+    n_pa_bins = size(event.pitch_angles)[2] # Number of pitch angle bins. = 16 for fs data, 8 for hs data
+
     # Sort tuples manually as sort() doesn't work for tuples
     if energy_range[2] < energy_range[1]; energy_range = (energy_range[2], energy_range[1]); end 
     if pitch_angle_range[2] < pitch_angle_range[1]; pitch_angle_range = (pitch_angle_range[2], pitch_angle_range[1]); end
@@ -753,14 +765,20 @@ function relative_error_of_integration(event::Event;
     α_slice_to_return = 1:16
 
     # Perform propagations
+    if event.data_type == "fs"
+        time_of_last_datapoint = ELFIN_SPIN_PERIOD
+    elseif event.data_type == "hs"
+        time_of_last_datapoint = ELFIN_SPIN_PERIOD / 2
+    end
+
     if time == true
-        Δt = diff([event.time..., event.time[end] + ELFIN_SPIN_PERIOD]) ./ 16 # Every t,E,α bin covers only 1/16 of the spin period
-        [absolute_error[:,E,α] .= _propagate_error_through_exact_integration(Δt[t_slice_to_integrate], absolute_error[t_slice_to_integrate, E, α]) for E in 1:16, α in 1:16]
+        Δt = diff([event.time..., event.time[end] + time_of_last_datapoint]) ./ 16 # Every t,E,α bin covers only 1/16 of the spin period
+        [absolute_error[:,E,α] .= _propagate_error_through_exact_integration(Δt[t_slice_to_integrate], absolute_error[t_slice_to_integrate, E, α]) for E in 1:16, α in 1:n_pa_bins]
         t_slice_to_return = 1
     end
     if energy == true
         ΔE = (event.energy_bins_max .- event.energy_bins_min) ./ 1000
-        [absolute_error[t,:,α] .= _propagate_error_through_exact_integration(ΔE, absolute_error[t, E_slice_to_integrate,α]) for t in 1:event.n_datapoints, α in 1:16]
+        [absolute_error[t,:,α] .= _propagate_error_through_exact_integration(ΔE, absolute_error[t, E_slice_to_integrate,α]) for t in 1:event.n_datapoints, α in 1:n_pa_bins]
         E_slice_to_return = 1
     end
     if pitch_angle == true
