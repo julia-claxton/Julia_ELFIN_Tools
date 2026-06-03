@@ -137,12 +137,10 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
     science_data_path = "$Julia_ELFIN_Tools_TOP_LEVEL/data/processed_scientific_data/$(year)$(month)$(day)_el$(lowercase(sat)).npz"
     position_data_path = "$Julia_ELFIN_Tools_TOP_LEVEL/data/processed_position_data/$(year)$(month)$(day)_el$(lowercase(sat)).npz"
     if !isfile(science_data_path)
-        # Always warn as this is more critical
         @warn "\033[93mCould not find $(science_data_path).\033[0m"
         return nothing
     end
     if !isfile(position_data_path)
-        # Always warn as this is more critical
         @warn "\033[93mCould not find $(position_data_path).\033[0m"
         return nothing
     end
@@ -205,7 +203,7 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
 
     # Get science time grid
     time_datetime = data["$(data_type)_time"][indices_of_interest]
-    duration = 3 + ((time_datetime[end] - time_datetime[1]).value) / 1000 # Units: seconds. Adding three because each datapoint represents the start of a ~three second recording interval
+    duration = ELFIN_SPIN_PERIOD + ((time_datetime[end] - time_datetime[1]).value) / 1000 # Units: seconds. Adding three because each datapoint represents the start of a ~three second recording interval
     time = time_datetime .- time_datetime[1] # Float time since start
     time  = [time[i].value for i = eachindex(time)] ./ 1000 # Convert to float. Units: seconds
     data["time"] = time
@@ -327,6 +325,17 @@ function create_event(start_datetime::DateTime, stop_datetime::DateTime, sat;
 
     # Calculate loss/anti-loss cones over the observation
     _calculate_loss_cones(data, binned, n_datapoints, indices_of_interest) # Mutates data dict
+    
+    # If data is half-spin, flip every other spin for consistency
+    for t in 1:size(binned["pitch_angles"])[1]
+        if binned["pitch_angles"][t, 1] > 90
+            binned["pitch_angles"][t, :] = reverse(binned["pitch_angles"][t, :])
+            binned["n_flux"][t, :, :] = reverse(binned["n_flux"][t, :, :], dims = 2)
+            binned["e_flux"][t, :, :] = reverse(binned["e_flux"][t, :, :], dims = 2)
+        end
+    end    
+    
+    # Get precipitation ratio
     _calculate_Jprec_over_Jtrap(data, binned)
 
     # Get average angles
@@ -577,7 +586,7 @@ function _calculate_Jprec_over_Jtrap(data, binned)
     data["Jprec_over_Jtrap"] = Jprec_over_Jtrap
 end
 
-function example_event(; choose_random = true, maximum_relative_error = Inf)
+function example_event(; choose_random = true, maximum_relative_error = Inf, data_type = "fs")
     # Returns a random example event from a curated list of science zone crossings.
     #             Start                           Stop                            Satellite     Note
     event_info = [DateTime("2021-02-02T01:58:00") DateTime("2021-02-02T02:01:00") "a"           # Blobby EMIC
@@ -599,7 +608,10 @@ function example_event(; choose_random = true, maximum_relative_error = Inf)
         i = 1
     end
     
-    return create_event(event_info[i, 1], event_info[i, 2], event_info[i, 3], maximum_relative_error = maximum_relative_error)
+    return create_event(event_info[i, 1], event_info[i, 2], event_info[i, 3],
+        maximum_relative_error = maximum_relative_error,
+        data_type = data_type
+    )
 end
 
 

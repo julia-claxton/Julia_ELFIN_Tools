@@ -271,7 +271,7 @@ function pad_time_series(event::Event; by = "index", show_plot = true)
 
     # Fill the image with the flux data
     for t = 1:length(time)-1
-        for α = 1:16
+        for α = 1:length(event.pitch_angles[begin,:])
             image_t_slice = time[t] .<= image_grid_time .< time[t+1]
             image_pa_slice = pitch_angle_bin_edges[t, α] .<= image_grid_pitch_angle .< pitch_angle_bin_edges[t, α+1]
 
